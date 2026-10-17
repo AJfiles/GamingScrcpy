@@ -102,6 +102,10 @@ try {
         Write-Output 'FAIL language selector or BtnMirror not present'; $fail++
     } else {
         $before = (ById $window 'BtnMirror').Current.Name
+        try {
+        ($langBox.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)).Expand()
+        Start-Sleep -Milliseconds 500
+    } catch {}
         $items = ByType $langBox $CT::ListItem
         if ($items.Count -lt 2) {
             Write-Output 'FAIL language selector has fewer than two items'; $fail++
