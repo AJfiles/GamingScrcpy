@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:GamingScrcpyLauncher"
         Title="{DynamicResource AppTitle}" Height="820" Width="1380"
+        MinWidth="1120" MinHeight="600"
         Background="{StaticResource Bg}" Loaded="OnWindowLoaded"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="10">
@@ -12,38 +13,30 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- header: identity, device, language -->
+        <!-- header: identity, device, actions. Two rows and no right-aligned
+             content inside a shrinking cell: the info column is a star with
+             MinWidth=0 and the actions are a WrapPanel, so a narrow window
+             reflows instead of drawing the device name over the buttons. -->
         <Border Grid.Row="0" Style="{StaticResource Card}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="230"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,16,8">
                     <TextBlock Text="{DynamicResource AppTitle}" FontSize="16" FontWeight="Bold"
                                Foreground="{StaticResource Accent}"/>
                     <TextBlock Text="{DynamicResource AppSubtitle}" Style="{StaticResource Hint}"
-                               MaxWidth="240"/>
+                               MaxWidth="260" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{DynamicResource LblDevice}" Style="{StaticResource Hint}"/>
-                    <ComboBox x:Name="DeviceCombo" Margin="0,3,0,0"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2" VerticalAlignment="Center"
-                            Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="BtnRefresh" Content="{DynamicResource BtnRescan}"
-                            Click="OnRefreshDevices" Margin="6,0,0,0"/>
-                    <Button x:Name="BtnWireless" Content="{DynamicResource BtnWireless}"
-                            Click="OnWirelessGuide" Margin="6,0,0,0"/>
-                    <Button x:Name="BtnPair" Content="{DynamicResource BtnPair}"
-                            Click="OnPairWireless" Margin="6,0,0,0"/>
-                    <Button x:Name="BtnConnect" Content="{DynamicResource BtnConnect}"
-                            Click="OnConnectWireless" Margin="6,0,0,0"/>
-                </StackPanel>
-                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="16,0,0,0">
+                <StackPanel Grid.Row="0" Grid.Column="2" Margin="16,0,0,8">
                     <TextBlock Text="{DynamicResource LblLanguage}" Style="{StaticResource Hint}"/>
                     <ComboBox x:Name="CboLanguage" Width="110" Margin="0,3,0,0"
                               SelectionChanged="OnLanguageChanged"
@@ -52,10 +45,50 @@
                         <ComboBoxItem Content="{DynamicResource LangEn}"/>
                     </ComboBox>
                 </StackPanel>
-                <TextBlock x:Name="DeviceBadge" Grid.Column="4" Text="{DynamicResource BadgeNoDevice}"
-                           Style="{StaticResource Num}" FontFamily="Segoe UI"
-                           Foreground="{StaticResource Warn}" VerticalAlignment="Center"
-                           Margin="16,0,0,0"/>
+
+                <!-- Device block and actions share row 1 as two Auto columns
+                     with a star filler between them, so the actions stay pinned
+                     right while the device block keeps its natural width. The
+                     summary line has its own row spanning the full width: as
+                     long as it lived in the star cell it could be squeezed to
+                     a few pixels and read as an overlap. Window MinWidth below
+                     is what keeps the two Auto columns inside the window. -->
+                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="0,0,0,4">
+                    <Ellipse x:Name="DevDot" Width="10" Height="10" Fill="{StaticResource Warn}"
+                             VerticalAlignment="Center"/>
+                    <TextBlock Text="{DynamicResource LblDevice}" Style="{StaticResource Hint}"
+                               VerticalAlignment="Center" Margin="8,0,8,0"/>
+                    <ComboBox x:Name="DeviceCombo" MinWidth="170" MaxWidth="300"
+                              VerticalAlignment="Center">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock x:Name="DeviceBadge" Text="{DynamicResource BadgeNoDevice}"
+                               Style="{StaticResource Num}" FontFamily="Segoe UI"
+                               Foreground="{StaticResource Warn}" VerticalAlignment="Center"
+                               Margin="12,0,0,0"/>
+                </StackPanel>
+
+                <WrapPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal"
+                           HorizontalAlignment="Right" MaxWidth="580" Margin="0,0,0,4">
+                    <Button x:Name="BtnRefresh" Content="{DynamicResource BtnRescan}"
+                            Click="OnRefreshDevices" Margin="6,0,0,0"/>
+                    <Button x:Name="BtnWireless" Content="{DynamicResource BtnWireless}"
+                            Click="OnWirelessGuide" Margin="6,0,0,0"/>
+                    <Button x:Name="BtnPair" Content="{DynamicResource BtnPair}"
+                            Click="OnPairWireless" Margin="6,0,0,0"/>
+                    <Button x:Name="BtnConnect" Content="{DynamicResource BtnConnect}"
+                            Click="OnConnectWireless" Margin="6,0,0,0"/>
+                </WrapPanel>
+
+                <TextBlock x:Name="TxtDeviceSummary" Grid.Row="2" Grid.Column="0"
+                           Grid.ColumnSpan="3" Style="{StaticResource Hint}" MinWidth="0"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Text="{DynamicResource SummaryNoDevice}"/>
             </Grid>
         </Border>
 
@@ -629,6 +662,7 @@
                                Margin="0,0,0,4"/>
                     <TextBox x:Name="TxtCommand" Height="130" IsReadOnly="True"
                              TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
                              FontFamily="{StaticResource Mono}" FontSize="11"/>
                     <TextBlock Text="{DynamicResource LblRunLog}" Style="{StaticResource SectionHeader}"/>
                 </StackPanel>
@@ -639,20 +673,34 @@
             </DockPanel>
         </Grid>
 
-        <!-- status -->
+        <!-- status: three star columns, so a long path is trimmed with a
+             tooltip instead of running off the left edge of the window -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,8,0,0">
             <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
                 <TextBlock x:Name="TxtStatus" Text="{DynamicResource StatusIdle}"
-                           Foreground="{StaticResource FgDim}"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                           Foreground="{StaticResource FgDim}" VerticalAlignment="Center"
+                           Margin="0,0,16,0" TextTrimming="CharacterEllipsis"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                            Margin="0,0,16,0">
                     <TextBlock Text="{DynamicResource LblScrcpy}" Style="{StaticResource Hint}"/>
-                    <TextBlock x:Name="TxtScrcpyPath" Margin="6,0,18,0"
+                    <TextBlock x:Name="TxtScrcpyPath" Margin="6,0,0,0"
                                Style="{StaticResource Num}" FontFamily="Segoe UI"
-                               Foreground="{StaticResource Fg}" Text="{DynamicResource ValNotSet}"/>
+                               Foreground="{StaticResource Fg}"
+                               Text="{DynamicResource ValNotSet}"
+                               MinWidth="0" TextTrimming="CharacterEllipsis"
+                               ToolTipService.ShowOnDisabled="True"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource LblAdb}" Style="{StaticResource Hint}"/>
                     <TextBlock x:Name="TxtAdbPath" Margin="6,0,0,0"
                                Style="{StaticResource Num}" FontFamily="Segoe UI"
-                               Foreground="{StaticResource Fg}" Text="{DynamicResource ValNotFound}"/>
+                               Foreground="{StaticResource Fg}" Text="{DynamicResource ValNotFound}"
+                               MinWidth="0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
             </Grid>
         </Border>

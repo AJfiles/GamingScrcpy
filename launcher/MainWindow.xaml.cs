@@ -336,6 +336,7 @@ public partial class MainWindow : Window
         {
             return;
         }
+        UpdateDeviceSummary();
         LblBitrate.Text = Loc.Format("UnitMbps", CbStep(CboBitrate, _cfg.BitrateMbps));
         LblMaxFps.Text = Loc.Format("UnitFps", CbStep(CboMaxFps, _cfg.MaxFps));
         LblAudioBitrate.Text =
@@ -394,12 +395,14 @@ public partial class MainWindow : Window
                     Log(Loc.Format("LogDeviceModel", model));
                 }
                 // Read-only, and the only way to know before starting whether
-                // this device can encode AV1 at all.
+                // this device can encode AV1 at all, or carry audio at all.
                 var sdkText = await Adb.GetDevicePropAsync(first.Serial,
                     "ro.build.version.sdk");
+                var release = await Adb.GetDevicePropAsync(first.Serial,
+                    "ro.build.version.release");
                 if (int.TryParse(sdkText, out var sdk) && sdk > 0)
                 {
-                    _devices[0] = first with { Sdk = sdk, Model = model };
+                    _devices[0] = first with { Sdk = sdk, Model = model, Release = release };
                     DeviceCombo.Items[0] = _devices[0].Display;
                     // Replacing an item drops the selection, which would leave
                     // the user with a device in the box and none selected.
@@ -412,7 +415,33 @@ public partial class MainWindow : Window
             DeviceBadge.Text = Loc.T("BadgeNoDevice");
             Log(Loc.T("LogNoDevice"));
         }
+        UpdateDeviceSummary();
         UpdateCommandPreview();
+    }
+
+    // The header's second line: what the phone actually is, in one trimmed
+    // sentence. Kept out of the badge so a long model name can never reach the
+    // action buttons, and re-computed on a language switch because it is
+    // localised text.
+    private void UpdateDeviceSummary()
+    {
+        if (!_ready)
+        {
+            return;
+        }
+        var d = _devices.Count > 0 ? _devices[0] : null;
+        var online = d is { State: "device" };
+        var good = (System.Windows.Media.Brush)FindResource("Accent2");
+        var warn = (System.Windows.Media.Brush)FindResource("Warn");
+        DevDot.Fill = online ? good : warn;
+        DeviceBadge.Foreground = online ? good : warn;
+        TxtDeviceSummary.Text = d is null
+            ? Loc.T("SummaryNoDevice")
+            : Loc.Format("SummaryDevice",
+                d.IsWireless ? "WiFi" : "USB",
+                string.IsNullOrWhiteSpace(d.Model) ? d.Serial : d.Model,
+                string.IsNullOrWhiteSpace(d.Release) ? "?" : d.Release,
+                d.Sdk > 0 ? d.Sdk.ToString() : "?");
     }
 
     private async void OnRefreshDevices(object sender, RoutedEventArgs e) =>

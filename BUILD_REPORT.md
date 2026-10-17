@@ -15,10 +15,10 @@ something could not be measured, it says so.
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,172,808 bytes (rebuilt for the AV1 capability fix, §5.1aa), window verified on screen |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,172,808 bytes (rebuilt again for the v3 §2 header, §5.1aj; the size is unchanged to the byte), window verified on screen |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (17 scripts + `fixtures\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh` and `bash tools/fx_pixel_test.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,296,395 bytes (≈120.5 MiB) at the last repack; `Expand-Archive` into an empty directory yields **160 files under 7 directories**, counted from the extraction rather than from an archive entry list. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (17 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), all exit 0 |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,300,327 bytes (≈120.5 MiB) at the v3 §2 repack; `Expand-Archive` into an empty directory yields **153 files under 7 directories**, counted from the extraction rather than from an archive entry list. The previous package carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (17 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), all exit 0 |
 | Regression suite | `tools\verify_all.sh` | **137 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_motorola_final.log`, §5.1ab); the earlier Lenovo TB-9707F run reached the same 137/0 (§5.1y, §5.4). The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
@@ -1978,6 +1978,90 @@ parameters*. Those parameters are read once at startup today, so a live path is
 needed: a small control pipe read by the client, writing into the postfx state
 under the same lock the LUT build already uses. That is where the risk of this
 feature lives, and §18 is what bounds it.
+
+### 5.1aj PR 2 — the header rebuilt, and measured twice because the first
+measurement was in the wrong language
+
+v3 §2 asked for a 3-column header (state icon / info / actions) whose info column
+can never push the actions. The first attempt did that and looked green:
+
+```
+WIDTH 1340 -> clean … WIDTH 940 -> clean      (out/v3_preflight_probe.ps1, 14:47 build)
+```
+
+It was green for the wrong reason. `tools/launcher_uiauto.ps1` had just run and
+left the config on **English**; the four Spanish buttons the user actually sees
+(`Reescanear ADB`, `Guía ADB inalámbrico`, `Emparejar inalámbrico`,
+`Conectar ip:puerto`) are ~120 px wider than their English labels. Re-running the
+probe with `language.txt=es` and a settle for the async `getprop` reads
+(`out/v3_header_verify.ps1`, kept out of `tools/` because it is scratch) produced:
+
+```
+CONNECTED badge='1 dispositivo(s)' summary='USB · moto g(7) power · Android 9 (SDK 28)'
+CONNECTED-W1380 -> clean
+CONNECTED-W1000 -> OVERLAP BtnRefresh x TxtDeviceSummary = 8x30px
+CONNECTED-W940  -> OVERLAP BtnRefresh x TxtDeviceSummary = 8x30px
+```
+
+So the summary line put inside the star cell did exactly what the old combo had
+done: when the two Auto columns (`Auto | * | Auto`) together exceed the window,
+the star column gets 0 width, its `Margin="16"` leaves an 8 px stub that sits
+under the first button, **and** the action buttons run past the right edge of the
+window — a worse bug than the overlap, because the user cannot click `Conectar`
+at all. Overlap alone was therefore not a sufficient assertion, and the verify
+script now measures two things per width: intersecting rectangles, and any
+rectangle crossing the window edge (`OFFSCREEN-R`).
+
+The layout that survives both:
+
+* Row 1 keeps `Auto | * | Auto` — device block left, actions right, star filler in
+  the middle. The filler is empty, so it can collapse to 0 without any control
+  being squeezed with it.
+* The secondary line (`TxtDeviceSummary`, `USB · model · Android X (SDK Y)`) moved
+  to its **own row** spanning all three columns with `MinWidth="0"` +
+  `TextTrimming="CharacterEllipsis"`. Nothing shares that row, so it cannot
+  overlap anything; a long model name ellipsizes.
+* `MinWidth="1120" MinHeight="600"` on the window. 1120 is the measured point
+  where the Spanish header still fits with the combo at its 300 px max; below it
+  the user can no longer resize, so the squeeze becomes unreachable by mouse.
+  The verification still forces 1000 and 940 px through Win32 to prove the
+  degrade is clean: no overlap, nothing off-screen.
+* The footer became an `Auto | * | *` grid with the same trimming on
+  `TxtStatus`, `TxtScrcpyPath` and `TxtAdbPath`, which fixes the clipped
+  `adb: gCapture\dist\…` from §5.1ae, and `TxtCommand` got a vertical scrollbar so
+  the preview no longer runs past its border.
+
+One more honesty fix fell out of the screenshots: with no device attached the
+label still read **"Dispositivo detectado"** next to an amber dot and
+"sin dispositivo". `LblDevice` is now the state-neutral `Dispositivo:` /
+`Device:` (§2.2 literally asks for "Dispositivo: [nombre]"), and the dot plus the
+badge carry the state.
+
+Re-measured with the packaged build, Spanish, phone attached and then with a stub
+`adb.exe` that exits 1 (nobody was here to unplug the phone, and the phone is not
+part of this test):
+
+| State | 1380 | 1200 | 1120 (=min) | 1000 (forced) | 940 (forced) |
+|---|---|---|---|---|---|
+| connected (`<dev-id-2>`) | clean | clean | clean | clean | clean |
+| no device | clean | — | clean | clean | clean |
+
+`out/shots/v3_header_connected.png`, `v3_header_no_device.png` (both 1380 px, top
+240 px of the window) and `v3_header_connected_min.png`,
+`v3_header_no_device_min.png` (1120 px) are the §2.3 deliverable.
+
+Gate after the change (`out/gate_v3_pr2.log`, 2026-10-17, phone attached):
+**137 passed, 0 failed** — same total as v2's last green run, because the header
+added no checks, only kept the existing ones green. §10 still finds every control
+by `AutomationId` after the redesign (`91 configurator controls present in the
+running window`), §11 drove the real device to a mirror window with
+`--serial=<dev-id-2>` present and stopped cleanly **with no retry** (the earlier
+standalone run did need one, the Android 9 MediaCodec settle of §5.1ab), and §15
+grew from 223 to **225 unique Loc keys** with the two new summary strings present
+in both languages.
+
+Reproduce: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+out/v3_header_verify.ps1` (expects `HEADER-VERIFY OK`).
 
 ## 6. What could NOT be validated here, and why
 

@@ -590,6 +590,11 @@ FFmpeg-based consumers.
   window by `tools/launcher_uiauto.ps1` (gate section 10).
 * **Device auto-detection** — `adb devices -l` plus `adb mdns services` for
   wireless-only devices; USB vs Wi-Fi classified; model read with `getprop`.
+  The header shows it as a state dot, the picker, a count badge, and one quiet
+  second line — `USB · moto g(7) power · Android 9 (SDK 28)` — so the Android
+  version that gates audio and AV1 is visible without opening a log. The window
+  has a 1120 × 600 minimum: below it the Spanish labels were measured drawing the
+  device summary over the action buttons, so it is no longer reachable.
 * **Language** — Español / English selector in the header. Everything visible
   (labels, combo items, tooltips, status text, dialogs, the run log and the
   command preview) comes from one table in `launcher/Loc.cs`, and the choice is

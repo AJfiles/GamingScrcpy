@@ -8,7 +8,7 @@ namespace GamingScrcpyLauncher;
 // two of the things a profile can ask for simply do not exist on older
 // Androids: an AV1 encoder, and any audio at all before API 30.
 public sealed record AndroidDevice(string Serial, string Model, string State, bool IsWireless,
-                                   int Sdk = 0)
+                                   int Sdk = 0, string Release = "")
 {
     public string Display =>
         $"{(IsWireless ? "WiFi " : "USB  ")}{Serial}" +
