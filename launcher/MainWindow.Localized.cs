@@ -190,10 +190,20 @@ namespace GamingScrcpyLauncher
             UpdateCommandPreview();
         }
 
+        private bool _shortcutsBuilt;
+
         private void OnShowShortcuts(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show(this, Loc.T("HintShortcuts"), Loc.T("SecShortcuts"),
-                            MessageBoxButton.OK, MessageBoxImage.Information);
+            // v3 §3: a grouped keycap list, opened in place. It is built once and
+            // re-localized through resource references, so switching language
+            // while it is open updates every cell.
+            if (!_shortcutsBuilt)
+            {
+                ShortcutsList.Build(ScGroups);
+                _shortcutsBuilt = true;
+            }
+            ScPanel.Visibility = ScPanel.Visibility == Visibility.Visible
+                ? Visibility.Collapsed : Visibility.Visible;
         }
 
         // Profiles travel as one JSON array, so a machine can be set up by

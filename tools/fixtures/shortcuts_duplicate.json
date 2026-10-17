@@ -1,0 +1,20 @@
+[
+  {
+    "category": "ScCatMirror",
+    "combo": "Super/Alt+F1",
+    "action": "ScActOsd",
+    "description": "ScDescOsd"
+  },
+  {
+    "category": "ScCatMirror",
+    "combo": "Super/Alt+F1",
+    "action": "ScActTouch",
+    "description": "ScDescTouch"
+  },
+  {
+    "category": "ScCatWindow",
+    "combo": "",
+    "action": "ScActQuit",
+    "description": "ScDescQuit"
+  }
+]

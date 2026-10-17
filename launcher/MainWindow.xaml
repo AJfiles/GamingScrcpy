@@ -119,6 +119,10 @@
             <TabControl Grid.Column="0" Background="Transparent" BorderBrush="{StaticResource Line}">
                 <TabItem Header="{DynamicResource TabQuick}">
                     <Grid Margin="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="280"/>
                             <ColumnDefinition Width="*"/>
@@ -136,10 +140,30 @@
                                     Style="{StaticResource Stop}" Click="OnStop"/>
                             <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
                                        TextWrapping="Wrap" Text="{DynamicResource HintShortcuts}"/>
-                            <Button Content="{DynamicResource SecShortcuts}" HorizontalAlignment="Left"
+                            <Button x:Name="BtnShortcuts" Content="{DynamicResource SecShortcuts}"
+                                    HorizontalAlignment="Left"
                                     Margin="0,8,0,0" Style="{StaticResource Chip}"
-                                    Click="OnShowShortcuts"/>
+                                    Click="OnShowShortcuts"
+                                    ToolTip="{DynamicResource HintShortcuts}"/>
                         </StackPanel>
+
+                        <!-- v3 §3: the shortcut list in place of a message box.
+                             Collapsed until asked for, so the Quick tab keeps showing
+                             only its primary controls. It spans the tab's two columns
+                             on its own row: inside the 280 px left column its
+                             description column measured as a star with no width to
+                             take, and the rows wrapped into 10 px ribbons. -->
+                        <Border x:Name="ScPanel" Grid.Row="1" Grid.ColumnSpan="2"
+                                Visibility="Collapsed" Margin="0,8,0,0" Padding="8"
+                                MaxWidth="720" HorizontalAlignment="Left"
+                                CornerRadius="8" Background="{StaticResource Panel}"
+                                BorderBrush="{StaticResource Line}" BorderThickness="1">
+                            <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="ScGroups"/>
+                            </ScrollViewer>
+                        </Border>
+
                         <StackPanel Grid.Column="1" Margin="16,0,0,0">
                             <TextBlock Text="{DynamicResource SecDevicePanel}"
                                        Style="{StaticResource SectionHeader}"/>

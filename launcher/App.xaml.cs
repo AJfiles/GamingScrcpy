@@ -17,7 +17,41 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        if (e.Args.Contains("--validate-shortcuts"))
+        {
+            ValidateShortcuts(e.Args);
+            Shutdown();
+            return;
+        }
         base.OnStartup(e);
+    }
+
+    // v3 §3: the shortcut list is checked by a self-test mode, exactly like the
+    // profiles, so the gate can assert both the table and the checker itself
+    // (a fixture with a duplicated key has to be reported, not ignored).
+    private static void ValidateShortcuts(string[] args)
+    {
+        IReadOnlyList<ShortcutRow> rows = Shortcuts.Table;
+        var file = Array.Find(args, a => a.StartsWith("--shortcuts-file="));
+        if (file != null)
+        {
+            rows = Shortcuts.LoadFile(file["--shortcuts-file=".Length..]);
+        }
+
+        var problems = Shortcuts.Validate(rows);
+        foreach (var p in problems)
+        {
+            Console.WriteLine("FAIL " + p);
+        }
+        if (problems.Count == 0)
+        {
+            Console.WriteLine($"SHORTCUTS OK rows={rows.Count} categories="
+                + System.Linq.Enumerable.Count(Shortcuts.ShownCategories(rows)));
+            Environment.ExitCode = 0;
+            return;
+        }
+        Console.WriteLine($"SHORTCUTS FAIL issues={problems.Count}");
+        Environment.ExitCode = 1;
     }
 
     private static void ValidateProfiles()

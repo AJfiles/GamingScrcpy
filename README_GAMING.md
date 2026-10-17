@@ -216,17 +216,48 @@ consume the same decoded stream.
 
 ## 5. Runtime shortcuts (mirror window)
 
-`Super` (Windows key) or `Alt` + …
+The same list is inside the launcher: **Rápido → ATAJOS** opens it as a grouped
+table (keycap · action · description), in whichever language the launcher is in.
+The table lives in `launcher/Shortcuts.cs` as data, is checked by
+`GamingScrcpyLauncher.exe --validate-shortcuts`, and gate section 17 fails if a
+row loses a cell, a translation or repeats a combination inside its category.
 
-| Key | Action |
-|---|---|
-| F1 | cycle OSD: off → compact → full |
-| F2 | borderless fullscreen on/off |
-| F3 | touch visualizer on/off |
-| F4 | show/hide the PC cursor |
-| F5 | always-on-top on/off |
+`MOD` means the shortcut modifier, `Super` (Windows key) or `Alt` by default —
+change it with `--shortcut-mod=f1,super`. Key combinations are not translated.
 
-Upstream shortcuts still apply (Alt+Super+… for resize, rotation, clipboard, etc.).
+| Key | Action | Note |
+|---|---|---|
+| **Mirror / device** | | |
+| `Super/Alt+F1` | Cycle the OSD | off → compact → full |
+| `Super/Alt+F3` | Touch visualizer | rings on the PC image only |
+| `Super/Alt+F4` | Show/hide the PC cursor | |
+| `MOD+O` | Turn the device screen off | mirror and audio keep running |
+| `MOD+Shift+O` | Turn the screen back on | without touching the power button |
+| `MOD+R` | Rotate the device | |
+| `MOD+H` / `MOD+B` / `MOD+S` | Home / Back / App switch | |
+| `MOD+M` | Menu | |
+| `MOD+Up` / `MOD+Down` | Volume up / down | |
+| `MOD+P` | Power | |
+| **Window** | | |
+| `Super/Alt+F2` | Borderless fullscreen on/off | see §6 for the startup defect |
+| `Super/Alt+F5` | Always-on-top on/off | |
+| `MOD+F` / `F11` | Fullscreen | |
+| `MOD+G` | Resize the window to 1:1 pixels | one screen pixel per picture pixel |
+| `MOD+W` | Remove the black borders | the window shrinks to the image |
+| `MOD+Shift+N` | Collapse the panels | closes the notification/settings shade |
+| `MOD+Q` | Quit | |
+| **Other** | | |
+| `MOD+C` / `MOD+V` | Copy from / paste to the device | |
+| `MOD+Shift+V` | Inject the clipboard as text | |
+| `MOD+I` | Show the performance counters | |
+| `MOD+Z` / `MOD+Shift+Z` | Pause / resume the stream | |
+| `MOD+Shift+R` | Restart the video encoder | |
+| `MOD+N` | Open the notification panel | |
+
+Recording has no shortcut in scrcpy 5 (`MOD+r` is *rotate*), so the launcher does
+not invent one: start a recording from the launcher buttons or with
+`--record-file`. The image filters have no runtime shortcut either — they are
+applied when the session starts, from the **Filtros** tab.
 
 ## 6. Measured cost of the post-filters
 
@@ -614,7 +645,7 @@ FFmpeg-based consumers.
 * **Layout** — dark theme (`#0E0F13` on `#16181F`, one accent, monospaced
   numbers) and seven tabs: **Quick**, **Capture**, **Presentation**, **Filters**,
   **Recording / OBS**, **Control**, **Advanced**. Nothing was removed by the
-  redesign, only regrouped: 92 named controls are asserted present in the live
+  redesign, only regrouped: 93 named controls are asserted present in the live
   window by `tools/launcher_uiauto.ps1` (gate section 10).
 * **Device auto-detection** — `adb devices -l` plus `adb mdns services` for
   wireless-only devices; USB vs Wi-Fi classified; model read with `getprop`.
@@ -627,6 +658,19 @@ FFmpeg-based consumers.
   (labels, combo items, tooltips, status text, dialogs, the run log and the
   command preview) comes from one table in `launcher/Loc.cs`, and the choice is
   remembered. Gate section 15 fails if a key is missing in either language.
+* **Shortcut list** — **ATAJOS** on the Quick tab opens the runtime shortcuts as
+  a table instead of a wall of text: a keycap-styled monospaced combination
+  (`Super/Alt+F1`, wide enough for `Super+Alt+F12`), a short action, and a grey
+  description, grouped under Espejo / Ventana / Otros with a collapse switch on
+  any group longer than six rows. The same button that opens it closes it, and it
+  is a section of the page rather than a dialog — a separate `Window` could not be
+  read back by the UI Automation gate, which only ever saw the main window. The
+  rows live in `launcher/Shortcuts.cs` as data (see §5), so gate section 17 can
+  check the table itself (`--validate-shortcuts`, plus a fixture with a duplicated
+  combination that must fail) and check what is actually painted in both
+  languages (`tools/shortcuts_table_test.ps1`). Categories with no hotkey in
+  scrcpy 5 — recording, filters — are left out rather than filled with invented
+  keys.
 * **Device panel** — model, battery level and temperature, read with read-only
   `getprop` / `dumpsys battery`. Nothing in the launcher writes a device setting.
 * **Audio honesty** — a phone below Android 11 (SDK 30) cannot hand scrcpy its

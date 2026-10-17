@@ -624,6 +624,40 @@ else
     fi
 fi
 
+head_ "17. shortcut table integrity (directive v3 §3.3)"
+# The launcher owns the shortcut list, so both halves run against the packaged
+# binary: its own checker for the data, and a UIA pass for what is rendered.
+# --validate-shortcuts runs from bash because the launcher is a WinExe: started
+# from PowerShell its stdout never reaches the log.
+sc_out="$("$LAUNCHER" --validate-shortcuts 2>&1)"
+sc_code=$?
+if [ "$sc_code" -eq 0 ] && printf '%s' "$sc_out" | grep -q 'SHORTCUTS OK'; then
+    ok "$(printf '%s' "$sc_out" | grep 'SHORTCUTS OK')"
+else
+    bad "the shipped shortcut table does not validate (exit $sc_code)"
+    printf '%s\n' "$sc_out" | head -4 | sed 's/^/        /'
+fi
+fx_out="$("$LAUNCHER" --validate-shortcuts "--shortcuts-file=$ROOT/tools/fixtures/shortcuts_duplicate.json" 2>&1)"
+fx_code=$?
+if [ "$fx_code" -ne 0 ] && printf '%s' "$fx_out" | grep -q 'duplicate combination'; then
+    ok "checker detects the fixture's duplicated key (positive control)"
+elif [ "$fx_code" -eq 0 ]; then
+    bad "the duplicate fixture passed -- a broken grep would pass in false"
+else
+    bad "fixture failed for the wrong reason (exit $fx_code)"
+    printf '%s\n' "$fx_out" | head -4 | sed 's/^/        /'
+fi
+st="$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/tools/shortcuts_table_test.ps1" 2>&1)"
+stcode=$?
+if [ "$stcode" -eq 0 ]; then
+    while read -r line; do ok "${line#OK }"; done < <(printf '%s\n' "$st" | grep '^OK')
+    printf '%s\n' "$st" | grep '^WARN' | sed 's/^/  \033[33mnote\033[0m  /'
+    true
+else
+    bad "shortcut table rendering failed (exit $stcode)"
+    printf '%s\n' "$st" | tail -10 | sed 's/^/        /'
+fi
+
 head_ "19. host filter pixels (tools/fx_pixel_test.sh)"
 # A colour grade is only worth shipping if each control moves the picture, so
 # the assertions run as their own harness: a deterministic test pattern, one

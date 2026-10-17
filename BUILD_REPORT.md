@@ -15,11 +15,11 @@ something could not be measured, it says so.
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,181,000 bytes (rebuilt again for the v3 §1.2 audio honesty, §5.1ak: +8,192 bytes over the §5.1aj header build), window verified on screen |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,201,480 bytes (rebuilt again for the v3 §3 shortcut table, §5.1al: +20,480 bytes over the §5.1ak audio-honesty build), window verified on screen and the new panel read back through UI Automation in both languages |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (17 scripts + `fixtures\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh` and `bash tools/fx_pixel_test.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,310,798 bytes (≈120.5 MiB) at the v3 §1.2 audio repack; `Expand-Archive` into an empty directory yields **138 files**, and the archive itself lists exactly 138 entries (`launcher\`, `scrcpy\`, `tools\` plus the three markdown files at the root). The earlier text claimed 153 files under 7 directories; that figure could not be reproduced against the current tree, so it is superseded by the two counts measured here, which agree. The previous package carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (17 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), all exit 0 |
-| Regression suite | `tools\verify_all.sh` | **137 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr3.clean.log`, §5.1ak — the same total the moto g(7) run reached before the audio section existed, `out\gate_motorola_final.log`, §5.1ab, and the Lenovo TB-9707F run, §5.1y/§5.4); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,330,346 bytes (≈120.5 MiB) at the v3 §3 shortcut-table repack; `Expand-Archive` into an empty directory yields **140 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\` and the root), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138; both are superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (18 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/render_driver_test.sh 20` (`OK`, `direct3d11 presented=20/20`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=27 categories=3`) with its duplicate-key fixture failing as required (`SHORTCUTS FAIL issues=2`, exit 1), and `powershell tools/shortcuts_table_test.ps1` (`SHORTCUT-TABLE OK`, 27 rows in each language) — that last one finds its launcher one level up, because an extracted package has no build tree |
+| Regression suite | `tools\verify_all.sh` | **145 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr4.log`, §5.1al — 137 of those lines are the checks that were already green in §5.1ak and the other 8 are section 17, the shortcut table: three assertions in each of the two languages plus the validator and its positive control); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
 
@@ -2174,6 +2174,90 @@ Reproduce the UI part: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
 out/v3_audio_probe.ps1` (expects `AUDIO-PROBE OK`), which walks the three tabs
 that hold the audio controls — WPF does not realize an unselected `TabItem`, so
 they are not in the UIA tree until their tab is selected.
+
+### 5.1al PR 4 — the shortcut block becomes a table, and the table becomes data
+
+The complaint was *"La zona de ATAJOS no está en lista, no se ve ordenada ni
+agradable"* (§5.1af measured it: one `MessageBox` with a 1 700-character
+paragraph). It is now a grouped keycap table inside the Quick tab, and the rows
+are data the gate can check.
+
+**What the table contains.** `launcher/Shortcuts.cs` holds 27 rows in three
+categories — Espejo (12), Ventana (7), Otros (8) — each a combination plus two
+`Loc.cs` keys (action, description). The combinations come from this fork's
+`gaming_event_watch()` in `app/src/gaming.c` (`Super/Alt+F1…F5`) and from
+`app/src/input_manager.c` for the upstream `MOD+…` set; every description in the
+report, the README and the UI was re-read against those two files, which is how
+three wrong paraphrases were caught (`MOD+G` is *resize to pixel-perfect*, not
+"cycle the resize constraint"; `MOD+W` is *remove the black borders*; `MOD+Shift+N`
+*collapses the notification/settings panels*). Categories with no hotkey in
+scrcpy 5 — Grabación, Filtros — are **absent**: there is no `toggle_recording`
+shortcut upstream (`MOD+R` rotates), and inventing a row to fill the section is
+exactly the kind of claim §8 forbids.
+
+**Gate section 17, three parts:**
+
+| Check | Result |
+|---|---|
+| `GamingScrcpyLauncher.exe --validate-shortcuts` | `SHORTCUTS OK rows=27 categories=3`, exit 0 |
+| same, on `tools/fixtures/shortcuts_duplicate.json` (positive control) | exit 1, `SHORTCUTS FAIL issues=2`: `FAIL duplicate combination 'Super/Alt+F1' in category 'ScCatMirror'` and `FAIL row 3: empty key combination` |
+| `tools/shortcuts_table_test.ps1`, packaged launcher, Spanish **and** English | `SHORTCUT-TABLE OK`, exit 0 — 27 rows per pass, every row with three non-empty cells, panel opens and closes from the same button |
+
+The render pass measures geometry, not pixels, so it fails on a layout that
+merely *looks* filled: the keycap text is 122 px wide and 14 px tall (one line),
+the action column starts 159 px after the combination, the description column is
+284 px wide, and the row pitch is 28 px. The assertions are `keycap ≥ 24 px`,
+`action.X − key.X ≥ 120 px`, `description ≥ 200 px wide and ≥ 40 px after the
+action`, `keycap ≤ 48 px tall`, and ≥ 20 rows. `out\shots\v3_shortcuts_panel.png`
+is the panel as painted.
+
+**Three failures found on the way, all real:**
+
+1. **`AutomationId` on a `Border` is invisible.** The first version put the id on
+   the keycap's `Border`; UIA found 0 rows because WPF decorations have no
+   automation peer. The id moved to the inner `TextBlock` and 27 rows appeared.
+2. **The card could not be a separate window.** The list first shipped as
+   `ShortcutsWindow.xaml`. After invoking the button, the process still owned
+   exactly one window visible to UIA — `'Gaming Scrcpy Launcher'` — so the test
+   could never read the list it claimed to check (and the Esc-to-close behaviour
+   could not be measured either, which is why that claim had already been removed
+   from the footer text). The list is now a `StackPanel` section of the Quick tab
+   toggled by the same button, which is both verifiable and what "en lista"
+   asked for. `ShortcutsWindow.xaml`/`.xaml.cs` are deleted.
+3. **A star column inside a horizontally scrollable `ScrollViewer` collapses.**
+   With the card in the Quick tab's fixed 280 px column, the description column
+   measured 10 px wide and 670 px tall — the text wrapped into a ribbon and
+   stretched the whole row with it, because a `ScrollViewer` that can scroll
+   horizontally measures its content with infinite width, and a star column given
+   infinity takes only its minimum. The card moved to its own row spanning both
+   tab columns (`MaxWidth="720"`, `HorizontalScrollBarVisibility="Disabled"`),
+   and the numbers above are what it measures now. The gate caught this as 54
+   failures across the two passes, which is the point of asserting geometry.
+
+Launcher rebuilt at 145,201,480 bytes (+20,480 over the §5.1ak build).
+
+**Gate.** `bash tools/verify_all.sh` with the moto g(7) power attached: **145
+passed, 0 failed** (`out\gate_v3_pr4.log`), up from the 137 of §5.1ak — section
+17 contributes 8 lines (validator, positive control, and three assertions in each
+of the two languages), and section 16 is the same SKIP as before. §10 now counts
+**93** configurator controls in the live window (the 92 of §5.1ak plus
+`BtnShortcuts`), and the §13/§14 invariants stayed green.
+
+**One wedge, documented rather than hidden.** The first PR-4 gate run stopped
+producing output inside section 6 for 33 minutes. `gamingdemo.exe` had printed
+`gamingdemo: PASS` one second after starting, had written the full 199,065,600
+bytes (24 × 1920×1080×4) and had reached `return ok ? 0 : 1`
+(`app/tests/gaming_demo.c:796`), but the process never left the system: it stayed
+at 1.7 s CPU with `Responding=True`, `Stop-Process` marked it for death and
+`taskkill /F` then reported *"no hay ninguna instancia activa de la tarea"* while
+the entry kept listing — a thread parked in a driver wait during the D3D11/SDL
+teardown, after the demo's borderless-fullscreen on/off pair. The identical
+command run standalone exits 0 in about a second, and the re-run of the whole
+gate is the 145/0 above, so this is the busy-desktop flake family of §5.1ab/§5.4
+rather than a PR-4 regression: PR-4 changes no C code, and the `scrcpy.exe` and
+`gamingdemo.exe` binaries are the ones §5.1ak shipped green. What it does prove
+is that a wedged host process is worth recognising from the *log's* mtime, not
+from the process list.
 
 ## 6. What could NOT be validated here, and why
 
