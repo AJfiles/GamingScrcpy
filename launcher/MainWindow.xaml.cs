@@ -219,9 +219,15 @@ public partial class MainWindow : Window
         c.FxSharp = ChkFxSharp.IsChecked == true;
         c.FxNight = ChkFxNight.IsChecked == true;
         c.FxSat = ChkFxSat.IsChecked == true;
+        c.FxContrast = ChkFxContrast.IsChecked == true;
+        c.FxBright = ChkFxBright.IsChecked == true;
+        c.FxGamma = ChkFxGamma.IsChecked == true;
         c.Sharpness = (int) Math.Round(SldSharp.Value);
         c.NightBoost = (int) Math.Round(SldNight.Value);
         c.Saturation = (int) Math.Round(SldSat.Value);
+        c.Contrast = (int) Math.Round(SldContrast.Value);
+        c.Brightness = (int) Math.Round(SldBright.Value);
+        c.Gamma = (int) Math.Round(SldGamma.Value);
 
         c.KeyboardMode = CbValue(CboKeyboard, "auto", "sdk", "uhid", "aoa", "disabled");
         c.MouseMode = CbValue(CboMouse, "auto", "sdk", "uhid", "aoa", "disabled");
@@ -277,6 +283,9 @@ public partial class MainWindow : Window
         SldSharp.Value = c.Sharpness;
         SldNight.Value = c.NightBoost;
         SldSat.Value = c.Saturation;
+        SldContrast.Value = c.Contrast;
+        SldBright.Value = c.Brightness;
+        SldGamma.Value = c.Gamma;
 
         ChkLowLatency.IsChecked = c.LowLatency;
         ChkBorderless.IsChecked = c.BorderlessFullscreen;
@@ -286,6 +295,9 @@ public partial class MainWindow : Window
         ChkFxSharp.IsChecked = c.FxSharp;
         ChkFxNight.IsChecked = c.FxNight;
         ChkFxSat.IsChecked = c.FxSat;
+        ChkFxContrast.IsChecked = c.FxContrast;
+        ChkFxBright.IsChecked = c.FxBright;
+        ChkFxGamma.IsChecked = c.FxGamma;
 
         TxtRecordPath.Text = c.RecordPath;
         TxtFrameBridge.Text = c.FrameBridge;
@@ -335,6 +347,9 @@ public partial class MainWindow : Window
         LblSharp.Text = $"{(int) SldSharp.Value}";
         LblNight.Text = $"{(int) SldNight.Value}";
         LblSat.Text = $"{(int) SldSat.Value}";
+        LblContrast.Text = $"{(int) SldContrast.Value}";
+        LblBright.Text = $"{(int) SldBright.Value}";
+        LblGamma.Text = $"{(int) SldGamma.Value}";
         LblCodecNote.Text = Cb(CboVideoCodec).Contains("av1", StringComparison.OrdinalIgnoreCase)
             ? Loc.T("NoteAv1")
             : Cb(CboVideoCodec).Contains("hevc", StringComparison.OrdinalIgnoreCase)

@@ -56,9 +56,20 @@ public sealed class AppConfig
     [JsonPropertyName("fxSharp")] public bool FxSharp { get; set; }
     [JsonPropertyName("fxNight")] public bool FxNight { get; set; }
     [JsonPropertyName("fxSat")] public bool FxSat { get; set; }
+    [JsonPropertyName("fxContrast")] public bool FxContrast { get; set; }
+    [JsonPropertyName("fxBrightness")] public bool FxBright { get; set; }
+    [JsonPropertyName("fxGamma")] public bool FxGamma { get; set; }
     [JsonPropertyName("sharpness")] public int Sharpness { get; set; } = 35;
     [JsonPropertyName("nightBoost")] public int NightBoost { get; set; }
     [JsonPropertyName("saturation")] public int Saturation { get; set; } = 100;
+    [JsonPropertyName("contrast")] public int Contrast { get; set; } = 100;
+    [JsonPropertyName("brightness")] public int Brightness { get; set; } = 100;
+    [JsonPropertyName("gamma")] public int Gamma { get; set; } = 100;
+
+    // The Performance tab has nothing to draw without this, and the fork prints
+    // one line per second, so it is on by default. A profile can still turn it
+    // off (the JSON key wins over the initializer when it is present).
+    [JsonPropertyName("telemetryLog")] public bool TelemetryLog { get; set; } = true;
 
     // ---- control ----
     [JsonPropertyName("touchVisualizer")] public bool TouchVisualizer { get; set; }
@@ -273,16 +284,28 @@ public sealed class AppConfig
         if (FxSharp) fx.Add("sharp");
         if (FxNight) fx.Add("night");
         if (FxSat) fx.Add("sat");
+        if (FxContrast) fx.Add("contrast");
+        if (FxBright) fx.Add("brightness");
+        if (FxGamma) fx.Add("gamma");
         if (fx.Count > 0)
         {
             a.Add($"--game-postfx={string.Join(",", fx)}");
             if (FxSharp) a.Add($"--game-sharp={Sharpness}");
             if (FxNight) a.Add($"--game-night-boost={NightBoost}");
             if (FxSat) a.Add($"--game-saturation={Saturation}");
+            if (FxContrast) a.Add($"--game-contrast={Contrast}");
+            if (FxBright) a.Add($"--game-brightness={Brightness}");
+            // the fork floors gamma at 25: below that the curve is a black
+            // screen, and a slider dragged to its end must not produce one
+            if (FxGamma) a.Add($"--game-gamma={Math.Max(25, Gamma)}");
         }
         if (TouchVisualizer)
         {
             a.Add("--game-touch-visualizer");
+        }
+        if (TelemetryLog)
+        {
+            a.Add("--game-telemetry-log");
         }
 
         // ---- control ----

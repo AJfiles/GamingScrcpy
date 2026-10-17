@@ -73,9 +73,16 @@ try {
                                         'ChkBorderless','ChkAlwaysOnTop','ChkMipmaps',
                                         'ChkTouchViz','CboOsd','SldCursorHide',
                                         'LblCursorHide') }
-        @{ key='TabFilters';      ids=@('ChkFxSharp','ChkFxNight','ChkFxSat','SldSharp',
-                                        'LblSharp','SldNight','LblNight','SldSat',
-                                        'LblSat') }
+        @{ key='TabFilters';      ids=@('ChkFxSharp','ChkFxNight','ChkFxSat',
+                                        'ChkFxContrast','ChkFxBright','ChkFxGamma',
+                                        'SldSharp','LblSharp','SldNight','LblNight',
+                                        'SldSat','LblSat','SldContrast','LblContrast',
+                                        'SldBright','LblBright','SldGamma','LblGamma',
+                                        'BtnProfileNeutral','BtnProfileVivid',
+                                        'BtnProfileCinematic','BtnProfileNight',
+                                        'BtnResetSharp','BtnResetNight','BtnResetSat',
+                                        'BtnResetContrast','BtnResetBright',
+                                        'BtnResetGamma') }
         @{ key='TabRecorder';     ids=@('CboContainer','TxtRecordPath','TxtFrameBridge',
                                         'TxtBridgeScale','CboBridgeFilter',
                                         'TxtAudioBridge','TxtAudioPcm','ChkPcmMute',

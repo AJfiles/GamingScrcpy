@@ -344,13 +344,18 @@
                         <TextBlock Text="{DynamicResource SecFilters}" Style="{StaticResource SectionHeader}"
                                    Margin="0,0,0,8"/>
                         <WrapPanel Margin="0,0,0,8">
-                            <Button Content="{DynamicResource BtnNeutral}" Style="{StaticResource Chip}"
+                            <Button x:Name="BtnProfileNeutral" Content="{DynamicResource BtnNeutral}"
+                                    Style="{StaticResource Chip}"
                                     Click="OnColorProfile" Tag="neutral"/>
-                            <Button Content="{DynamicResource BtnVivid}" Style="{StaticResource Chip}"
+                            <Button x:Name="BtnProfileVivid" Content="{DynamicResource BtnVivid}"
+                                    Style="{StaticResource Chip}"
                                     Click="OnColorProfile" Tag="vivid"/>
-                            <Button Content="{DynamicResource BtnCinematic}" Style="{StaticResource Chip}"
+                            <Button x:Name="BtnProfileCinematic"
+                                    Content="{DynamicResource BtnCinematic}"
+                                    Style="{StaticResource Chip}"
                                     Click="OnColorProfile" Tag="cinematic"/>
-                            <Button Content="{DynamicResource BtnNight}" Style="{StaticResource Chip}"
+                            <Button x:Name="BtnProfileNight" Content="{DynamicResource BtnNight}"
+                                    Style="{StaticResource Chip}"
                                     Click="OnColorProfile" Tag="night"/>
                         </WrapPanel>
                         <WrapPanel Margin="0,0,0,8">
@@ -358,7 +363,13 @@
                                       Margin="0,0,16,0"/>
                             <CheckBox x:Name="ChkFxNight" Content="{DynamicResource LblNightBoost}"
                                       Margin="0,0,16,0"/>
-                            <CheckBox x:Name="ChkFxSat" Content="{DynamicResource LblSaturation}"/>
+                            <CheckBox x:Name="ChkFxSat" Content="{DynamicResource LblSaturation}"
+                                      Margin="0,0,16,0"/>
+                            <CheckBox x:Name="ChkFxContrast" Content="{DynamicResource LblContrast}"
+                                      Margin="0,0,16,0"/>
+                            <CheckBox x:Name="ChkFxBright" Content="{DynamicResource LblBrightness}"
+                                      Margin="0,0,16,0"/>
+                            <CheckBox x:Name="ChkFxGamma" Content="{DynamicResource LblGamma}"/>
                         </WrapPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -369,6 +380,7 @@
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition/><RowDefinition/><RowDefinition/>
+                                <RowDefinition/><RowDefinition/><RowDefinition/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{DynamicResource LblSharpness}"
                                        Style="{StaticResource FieldLabel}"/>
@@ -376,7 +388,8 @@
                                     Maximum="100" Value="35" ValueChanged="OnSliderChanged"/>
                             <TextBlock x:Name="LblSharp" Grid.Row="0" Grid.Column="2"
                                        Style="{StaticResource Num}" Text="35"/>
-                            <Button Grid.Row="0" Grid.Column="3" Content="{DynamicResource BtnResetFilter}"
+                            <Button x:Name="BtnResetSharp" Grid.Row="0" Grid.Column="3"
+                                    Content="{DynamicResource BtnResetFilter}"
                                     Style="{StaticResource Chip}" Click="OnResetFilter" Tag="sharp"/>
                             <TextBlock Grid.Row="1" Text="{DynamicResource LblNightBoost}"
                                        Style="{StaticResource FieldLabel}"/>
@@ -384,7 +397,8 @@
                                     Maximum="100" Value="40" ValueChanged="OnSliderChanged"/>
                             <TextBlock x:Name="LblNight" Grid.Row="1" Grid.Column="2"
                                        Style="{StaticResource Num}" Text="40"/>
-                            <Button Grid.Row="1" Grid.Column="3" Content="{DynamicResource BtnResetFilter}"
+                            <Button x:Name="BtnResetNight" Grid.Row="1" Grid.Column="3"
+                                    Content="{DynamicResource BtnResetFilter}"
                                     Style="{StaticResource Chip}" Click="OnResetFilter" Tag="night"/>
                             <TextBlock Grid.Row="2" Text="{DynamicResource LblSaturation}"
                                        Style="{StaticResource FieldLabel}"/>
@@ -392,8 +406,36 @@
                                     Maximum="200" Value="120" ValueChanged="OnSliderChanged"/>
                             <TextBlock x:Name="LblSat" Grid.Row="2" Grid.Column="2"
                                        Style="{StaticResource Num}" Text="120"/>
-                            <Button Grid.Row="2" Grid.Column="3" Content="{DynamicResource BtnResetFilter}"
+                            <Button x:Name="BtnResetSat" Grid.Row="2" Grid.Column="3"
+                                    Content="{DynamicResource BtnResetFilter}"
                                     Style="{StaticResource Chip}" Click="OnResetFilter" Tag="sat"/>
+                            <TextBlock Grid.Row="3" Text="{DynamicResource LblContrast}"
+                                       Style="{StaticResource FieldLabel}"/>
+                            <Slider x:Name="SldContrast" Grid.Row="3" Grid.Column="1" Minimum="0"
+                                    Maximum="200" Value="110" ValueChanged="OnSliderChanged"/>
+                            <TextBlock x:Name="LblContrast" Grid.Row="3" Grid.Column="2"
+                                       Style="{StaticResource Num}" Text="110"/>
+                            <Button x:Name="BtnResetContrast" Grid.Row="3" Grid.Column="3"
+                                    Content="{DynamicResource BtnResetFilter}"
+                                    Style="{StaticResource Chip}" Click="OnResetFilter" Tag="contrast"/>
+                            <TextBlock Grid.Row="4" Text="{DynamicResource LblBrightness}"
+                                       Style="{StaticResource FieldLabel}"/>
+                            <Slider x:Name="SldBright" Grid.Row="4" Grid.Column="1" Minimum="0"
+                                    Maximum="200" Value="100" ValueChanged="OnSliderChanged"/>
+                            <TextBlock x:Name="LblBright" Grid.Row="4" Grid.Column="2"
+                                       Style="{StaticResource Num}" Text="100"/>
+                            <Button x:Name="BtnResetBright" Grid.Row="4" Grid.Column="3"
+                                    Content="{DynamicResource BtnResetFilter}"
+                                    Style="{StaticResource Chip}" Click="OnResetFilter" Tag="bright"/>
+                            <TextBlock Grid.Row="5" Text="{DynamicResource LblGamma}"
+                                       Style="{StaticResource FieldLabel}"/>
+                            <Slider x:Name="SldGamma" Grid.Row="5" Grid.Column="1" Minimum="25"
+                                    Maximum="200" Value="100" ValueChanged="OnSliderChanged"/>
+                            <TextBlock x:Name="LblGamma" Grid.Row="5" Grid.Column="2"
+                                       Style="{StaticResource Num}" Text="100"/>
+                            <Button x:Name="BtnResetGamma" Grid.Row="5" Grid.Column="3"
+                                    Content="{DynamicResource BtnResetFilter}"
+                                    Style="{StaticResource Chip}" Click="OnResetFilter" Tag="gamma"/>
                         </Grid>
                     </StackPanel>
                 </TabItem>

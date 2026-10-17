@@ -10,15 +10,15 @@ something could not be measured, it says so.
 
 | Deliverable | Path | Evidence |
 |---|---|---|
-| Forked client | `dist\GamingScrcpy\scrcpy\scrcpy.exe` | libusb build (AOA gamepad enabled), runs with only `C:\Windows\system32` in `PATH`, prints `scrcpy 5.0.1`, lists 16 `--game-*` flags in `--help` (598,365 bytes) |
+| Forked client | `dist\GamingScrcpy\scrcpy\scrcpy.exe` | libusb build (AOA gamepad enabled), runs with only `C:\Windows\system32` in `PATH`, prints `scrcpy 5.0.1`, lists 21 distinct `--game-*` flags in `--help` (606,361 bytes) |
 | Server | `dist\GamingScrcpy\scrcpy\scrcpy-server.jar` (+ `scrcpy-server` name used by the client) | version-matched official v5.0.1 build, unmodified |
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,111,368 bytes, window verified on screen |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,168,712 bytes, window verified on screen |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
-| Validation tooling | `dist\GamingScrcpy\tools\*` (9 scripts) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh` and `bash tools/render_driver_test.sh` pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,214,485 bytes (≈126.2 MB) in 130 entries at the last repack, built with `Compress-Archive` from `dist\GamingScrcpy\*`. This is the first archive whose client was built with meson's `portable` option (it loads `scrcpy-server` from its own directory) and the first to contain `scrcpy.png`/`disconnected.png`; both gaps only showed up when a real device was connected (§5.1l). The 130th and 129th entries are `tools\device_latency_probe.sh` and `tools\wake_device_screen.ps1`, so the latency measurement of §5.1n travels with the package. The count and the size shift by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. Verified by extraction: `Expand-Archive` into an empty directory, then `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases) and `bash tools/render_driver_test.sh 20` (4 backends) from inside it, both `OK`, exit 0 |
+| Validation tooling | `dist\GamingScrcpy\tools\*` (17 scripts + `fixtures\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh` and `bash tools/fx_pixel_test.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,285,991 bytes (≈120.4 MiB) in 145 entries at the last repack, built with `Compress-Archive` from `dist\GamingScrcpy\*`. The entry count grew from 130 because the three harnesses written for §D/§C (`fx_pixel_test.sh`, `device_filter_test.sh`, `device_latency_matrix.sh`) and the fixtures directory travel with the package, so a user can re-run the pixel assertions and the latency matrix without a build tree. The count and the size shift by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. Verified by extraction: `Expand-Archive` into an empty directory, then `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`) from inside it, all exit 0 |
 | Regression suite | `tools\verify_all.sh` | 120 checks, 0 failed in the last run with a device attached (§5.4, §5.1n, §5.1o, §5.1p, §5.1q). The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
@@ -1269,6 +1269,271 @@ measures with the screen lit, repeats each cell, and reports median/p90/p99 per
 combination; until those numbers are in, nothing here claims a latency
 improvement.
 
+### 5.1v Colour grade extension (§D): contrast, brightness and gamma, asserted per pixel
+
+The engine already had three host filters (CAS sharpen, night-boost,
+saturation). This adds the three the directive asked for and puts all six
+behind the same rule: **a filter only runs when its own bit is set**.
+
+Fork changes: `SC_POSTFX_CONTRAST | SC_POSTFX_BRIGHTNESS | SC_POSTFX_GAMMA`
+in `app/src/gaming.h`, three `--game-*` options with `parse_bounded_int` and
+help text in `app/src/cli.c`, wiring in `app/src/scrcpy.c`, and
+`build_luma_lut()` rewritten to compose brightness → contrast → gamma →
+night-boost into **one 256-entry table**, so four luma filters still cost a
+single pass over the Y plane. Contrast pivots at mid grey (100 = unchanged,
+0-200), brightness is an offset (100 = unchanged, 0-200 maps to ±0.5 of the
+range), gamma is percent/100 clamped to [0.25, 2.0] and rejected below 25 by
+the CLI, because a zero exponent divides by zero and a floor of 25 is where
+the curve is still usable. All three act on luma only: a grade cannot shift
+hue, and chroma stays the business of saturation.
+
+`app/tests/gaming_demo.c` grew the machinery to prove it: `--fx-only=<list>`
+enables one filter at a time, `--fx-contrast/--fx-bright/--fx-gamma` set its
+value, `--stats` prints mean luma, luma variance and chroma variance for the
+frame before and after `sc_gaming_process_frame()`, and `--png=PATH` dumps the
+filtered frame (libavcodec's png encoder; it refuses to open without a
+time_base, which is the kind of thing only a run can tell you).
+`tools/fx_pixel_test.sh` turns those numbers into 51 assertions and keeps the
+images in `out/fx/` for eyeballing.
+
+Measured on the deterministic test pattern (frame 0, 240x320, neutral luma
+mean 53.8371, luma variance 5658.9660, chroma variance 4067.0291):
+
+| filter | setting | after | direction |
+|--------|---------|-------|-----------|
+| none | postfx off | 53.8371 / 5658.9660 / 4067.0291 | **identical to the input, all three metrics** |
+| contrast | 100 | 53.8371 | inert |
+| contrast | 140 | 42.9433 | lower (the pattern is dark, so contrast pushes it down) |
+| contrast | 60 | 83.3175 | higher, and higher than contrast=140 → monotonic |
+| brightness | 100 / 150 / 50 | 53.8371 / 112.8040 / 26.3500 | ±, and chroma variance unmoved |
+| gamma | 100 / 150 / 60 | 53.8371 / 75.4920 / 37.2471 | ± |
+| saturation | 100 / 160 / 50 | chroma var 4067.03 / 5712.65 / 1016.76 | ±, and luma mean unmoved |
+| sharpen | 80 | luma var 6876.90 | detail energy up, chroma var unmoved |
+| night-boost | 60 | 105.9097 | up |
+
+saturation=50 lands on exactly (1/2)² of the neutral chroma variance, which is
+what multiplying (chroma-128) by 0.5 means; saturation=160 measures 1.4x
+instead of the ideal (1.6)²=2.56x because the pattern's brightest bar clips at
+255. The assertion is on the direction, not the ratio.
+
+**The defect the harness caught on its first run.** `--fx-only=contrast
+--fx-contrast=100` was supposed to be inert and instead moved the mean luma
+from 53.84 to 90.14. Night-boost was being applied whenever
+`night_boost != 0`, ignoring its bit, and the demo always carries `night=40` in
+its params — so any caller that set a value for one filter silently graded the
+picture with another. Fixed by gating every stage on its own bit, which also
+makes `--game-postfx=gamma` without a value a no-op instead of a black screen.
+This is exactly the class of bug the "one filter at a time" design exists to
+find: the identity case is only meaningful if nothing else can leak in.
+
+Hardware (`tools/device_filter_test.sh`, 6 PASS, TB-9707F over USB): the
+packaged client with `--game-contrast=140 --game-brightness=120
+--game-gamma=130 --game-saturation=130` logs `Host post-processing enabled
+(sharpen=0 night=0 sat=130 contrast=140 brightness=120 gamma=130)`, the plain
+session logs no grade at all, both capture at the panel's own 2316x1080, and
+the device's brightness state read before and after with `dumpsys display` is
+byte-identical (`mBrightness=0.15686277;…`). The brightening is on the PC's
+picture and nowhere else; nothing on the tablet was touched.
+
+Not claimed: the two sessions in that harness reported `lat_med=307ms` (plain,
+first) and `85ms` (graded, second). That ordering effect is a warm-up and scene
+difference, not evidence that a colour grade reduces latency, which is why §C
+measures with repeated reference probes instead of one pair.
+
+Launcher: three new sliders with numeric readout and a per-filter reset
+(`SldContrast/SldBright/SldGamma` + `LblContrast/LblBright/LblGamma` +
+`BtnReset*`), a checkbox per filter (the flag is only emitted for filters the
+user actually enabled), and the four one-click colour chips now set real
+values and enable only what they move:
+
+| chip | sharp | night | sat | contrast | brightness | gamma |
+|------|-------|-------|-----|----------|------------|-------|
+| Neutral | off | off | off | off | off | off |
+| Vivid | 30 | — | 135 | 118 | — | — |
+| Cinematic | 45 | 25 | 92 | 108 | — | 115 |
+| Night | 20 | 85 | — | — | 112 | 130 |
+
+The chips and the six reset buttons now carry `x:Name`, so they are reachable
+by AutomationId; `tools/launcher_uiauto.ps1` asserts all 28 controls of the
+Filters tab (6 checkboxes, 6 sliders, 6 readouts, 4 chips, 6 resets) exist in
+both languages. Gate section 16 runs the pixel harness as part of `verify_all.sh`.
+
+One defect the localization check caught on the first full run: `LblContrast`,
+`LblBrightness` and `LblGamma` were declared **twice** in `launcher/Loc.cs`
+("222 unique of 225 rows"), because the three rows added for §D duplicated keys
+that already existed for the readouts. The launcher did not crash and the UI
+looked right, because the index is built with `esIndex[key] = i` — assignment,
+not `Add` — so the *later* row silently wins and the earlier one becomes dead
+text. That is exactly the failure mode a key-parity check cannot see and a
+duplicate-row check can, so the rule stayed, the duplicates were folded into
+one row each (keeping the `"Gamma %"` wording that was actually being shown),
+and the run below is from the de-duplicated table.
+
+### 5.1x The twelve "what else should we add" ideas, with cost and benefit
+
+The user asked for ideas and then asked for them to be judged rather than
+shopped. Status of each of the twelve, with what it would actually cost in this
+codebase:
+
+| idea | status | why |
+|------|--------|-----|
+| Live performance graph | **shipped** | Performance tab, 1 Hz polyline of the per-second latency the fork already reports. Needed one fix this session: the tab was labelled "fed by `--game-telemetry-log`" while the launcher never passed that flag, so it could never fill (§5.1w). |
+| Device panel: battery %, temperature, model | **shipped** | Read-only (`dumpsys battery`, `getprop`); gate section 14 keeps the write commands out. |
+| Import / export profiles as JSON | **shipped** | One file copies a machine's whole setup. |
+| Keyboard-shortcut overlay (F1) | **shipped** | Dialog listing the fork and upstream bindings. |
+| Encoder preset, discrete dropdowns, 6 profiles | **shipped** | §E / §F above. |
+| Screenshot hotkey | **not built, cheap-next-round** | Verified absent: `grep -i "screenshot\|snapshot" app/src app/server` finds nothing, so upstream 5.0.1 as vendored here has no capture key either. Cost is small now that §D exists: `save_png()` in `app/tests/gaming_demo.c` is a working YUV420P→PNG path (~40 lines), plus one key binding. The non-trivial part is *where*: a readback inside the present path costs milliseconds at the worst moment, so it belongs on the frame the bridge already copies, not on a fresh `SDL_RenderReadPixels`. |
+| Tray icon (Start mirror / Stop) | not built, low value | WPF tray support means an extra dependency (H.NotifyIcon or WinForms `NotifyIcon`), and the launcher's own buttons already do the job in two clicks. Est. 2-3 h, cosmetic gain. |
+| Per-app profiles (package → profile, auto-apply) | not built, medium | The read side is easy (`dumpsys window` / `dumpsys activity` for the current focus, read-only and legal), but "auto-apply" means killing and restarting the mirror whenever the foreground app changes, which drops frames at exactly the wrong moment. Est. 4-6 h, and the interruption has to be solved first. |
+| Chapter markers in the recording | not built, medium | MKV cue writing means touching the muxer path in `app/src/audio_player.c`/`recorder.c` and libavformat's cluster-flush semantics. Est. 6 h, and it is only verifiable with a player that shows chapters. |
+| Instant replay buffer (ShadowPlay style) | **documented backlog, expensive** | A ring of the last N seconds must live on the recorder path: keep encoding, keep packets, and be able to start a file mid-GOP (needs an IDR-keyed split or the clip starts corrupted). Est. 1-2 days of careful work in the demuxer/recorder plumbing, plus memory sizing (N seconds at 40 Mb/s is ~5 MB/s). Highest gamer value on the list, highest risk of introducing a recording regression the current harness would not catch. |
+| Auto-update check | rejected on policy | "Phone home" behaviour in a tool that is often run offline; the user would have to opt in to a network call the launcher does not need. Better shipped as a manual "check for new version" button if ever asked for. |
+| Virtual camera (DirectShow) | **excluded by the user this round** | Large COM component that must be registered system-wide. Already documented as an explicit backlog in README §8 so the docs do not read as if it were a bug. |
+| Wireless ADB one-click with QR | **excluded by the user this round** | Enabling it writes the tablet's transport (`adb tcpip`), which §4.2 forbids. Manual procedure with the exact commands is in README §7 item 9; the launcher's wireless button now opens a guide instead of touching the device. |
+
+### 5.1w §C measured, not assumed: a staged latency matrix on the tablet
+
+`tools/device_latency_matrix.sh` runs the packaged client against the attached
+TB-9707F, 12 s per probe, `--game-telemetry-log` on, scene woken 5 s in, and
+writes the table to `out/dev/latency_matrix.md` (17 probes, `MATRIX OK`).
+
+What the numbers are: `--game-telemetry-log`'s `telemetry-summary` takes the
+**worst frame of each second** and reports percentiles of that (`gaming.c`
+`window_lat_max` → `window_latency[]`), so `med=48ms` means "in half the
+seconds, the slowest frame took at least 48 ms from demuxer receive to
+`SDL_RenderPresent`". It is the host half of glass-to-glass: the device's own
+capture+encode time is not observable from here. The same statistic produced the
+44 ms baseline in §5.1n, so the two are comparable.
+
+The full cross product the directive names is 3 buffers × 2 codecs × 3
+renderers × 2 low-latency × 4 presets = 144 sessions ≈ 36 minutes of someone
+else's tablet. That is not a reasonable thing to spend, so the sweep is
+**one factor at a time** from a fixed reference (`buffer=0, h264, direct3d11,
+low-latency, ultrafast`) and ends with a **repeat of the reference** — the
+repeat is what makes the table readable, because the gap between it and the
+identical row above it is the noise floor.
+
+| stage | combination | med / p90 / p99 / max / avg | fps | scene | src |
+|-------|-------------|------------------------------|-----|-------|-----|
+| A | buffer=0 h264 | 48 / 346 / 701 / 701 / 18 | 57.9 | live | 2316x1080 |
+| A | buffer=0 h265 | 109 / 369 / 498 / 498 / 18 | 59.0 | live | 2316x1080 |
+| A | buffer=50 h264 | 118 / 253 / 555 / 555 / 55 | 56.4 | live | 2316x1080 |
+| A | buffer=50 h265 | 127 / 237 / 622 / 622 / 83 | 59.9 | live | 2316x1080 |
+| A | buffer=default h264 | 203 / 453 / 778 / 778 / 18 | 58.3 | live | 2316x1080 |
+| A | buffer=default h265 | 65 / 180 / 377 / 377 / 18 | 58.8 | live | 2316x1080 |
+| B | direct3d11 lowlat=on | 198 / 330 / 339 / 339 / 32 | 59.2 | live | 2316x1080 |
+| B | direct3d11 lowlat=off | 78 / 449 / 477 / 477 / 16 | 57.1 | live | 2316x1080 |
+| B | vulkan lowlat=on | **1129 / 1428 / 1534 / 1534 / 1665** | 55.7 | live | 2316x1080 |
+| B | vulkan lowlat=off | **1150 / 1555 / 1580 / 1580 / 1426** | 57.5 | live | 2316x1080 |
+| B | opengl lowlat=on | **1607 / 2421 / 2478 / 2478 / 1912** | 61.6 | live | 2316x1080 |
+| B | opengl lowlat=off | **604 / 1045 / 1195 / 1195 / 868** | 54.2 | live | 2316x1080 |
+| C | preset=default | 67 / 407 / 466 / 466 / 19 | 57.3 | live | 2316x1080 |
+| C | preset=ultrafast | 266 / 349 / 620 / 620 / 33 | 58.9 | live | 2316x1080 |
+| C | preset=fast | 217 / 274 / 367 / 367 / 106 | 59.6 | live | 2316x1080 |
+| C | preset=medium | 92 / 455 / 534 / 534 / 65 | 58.7 | live | 2316x1080 |
+| R | repeat of reference (identical to A row 1 + d3d11 + ultrafast) | 166 / 365 / 424 / 424 / 144 | 59.8 | live | 2316x1080 |
+
+What the table supports, and what it does not:
+
+* **The noise floor is ~120-150 ms.** The reference configuration measured
+  48, 198 and 166 ms in three separate 12 s windows. So no row here may be
+  called better than another by less than roughly 150 ms, which rules out
+  ranking `--video-buffer`, codec, `--game-low-latency` or the encoder preset
+  from this run. Reporting "buffer=0 beats default" from a 48 vs 203 ms pair
+  would have been exactly the kind of claim this project forbids (§4.3): the
+  same config produced 166 ms an hour later in the same session.
+* **The renderer choice is far outside that band, and it repeats.** Vulkan
+  (1129 / 1150 ms) and OpenGL (1607 / 604 ms) sit 5-30× above every
+  Direct3D 11 row, with and without `--game-low-latency`, while still
+  presenting at 54-62 fps. The gate's backend sweep (§5.1r) only checked that
+  the requested backend is the one SDL created, so this was unmeasured until
+  now: on this Windows host the mirror works on all three backends but is
+  only *usable* on `direct3d11`. Recorded in README §7 so the dropdown does
+  not read as an invitation.
+* **The 44 ms baseline was not beaten, and there is no regression either.**
+  The best observation this round (48 ms median) is the baseline within the
+  noise, measured after every change in this report (encoder preset emission,
+  discrete dropdowns, the new grade, the always-on telemetry line). Nothing
+  added host latency that the numbers can see.
+* To actually rank the sub-150 ms factors the design has to change:
+  interleaved A/B arms (ABABAB), ≥5 min per arm, ≥5 repetitions, and an
+  explicit statement of what is on screen, because an Android home screen
+  under 60 fps gives a different distribution than a game. That is about an
+  hour of hardware per pair of configurations, which is why it is listed as
+  the follow-up rather than done silently here.
+
+Product changes that came out of this: the launcher now always passes
+`--game-telemetry-log` (the Performance tab is labelled as fed by it and could
+never fill without the flag — visible in every line of the `--validate-profiles`
+output in §5.1u's re-run), and the renderer dropdown's tooltip/README note
+records the measured Direct3D-11 recommendation.
+
+### 5.1y Directive §A: the launcher rebuilt as a dark, tab-grouped surface
+
+The theme lives in `launcher/App.xaml` as a resource dictionary, so no control in
+`MainWindow.xaml` carries a colour of its own:
+
+| token | value | used for |
+|---|---|---|
+| `Bg` | `#FF0E0F13` | window background |
+| `Panel` | `#FF16181F` | every surface, card and input |
+| `Accent` | `#FF4FA3FF` | section headers, selection, focus border |
+| `Accent2` | `#FF2BD98A` | the live/OK state only (device count, telemetry) |
+| `Mono` | `Consolas` | the `Num` style: every number the user reads |
+| corner radius | `6` | buttons, inputs, panels |
+
+Layout went from one scrolling column to **seven tabs** -- `Quick`, `Capture`,
+`Presentation`, `Filters`, `Recording / OBS`, `Control`, `Advanced` -- with the
+default `Quick` tab holding four buttons, the device picker and the live
+telemetry block, which is the "3-5 controls on first sight" the directive asked
+for. `Advanced` is the tab the long tail moved into (profile name, extra
+arguments, raw JSON), so nothing was deleted: the UI Automation audit now walks
+**91** named controls where the pre-redesign plan listed 11, and each control
+kept its `x:Name`, which is what keeps its AutomationId stable.
+
+Two deliberate deviations from the suggested guide, both worth stating:
+
+* **Tabs instead of collapsible sections.** WPF's `Expander` needs a retemplated
+  header to look right in this theme, and -- more importantly -- every collapsed
+  section removes its children from the UI Automation tree, so a collapsed panel
+  turns "the control exists" into "the control exists *if the user happens to
+  have expanded it*". Tab items are always in the tree once selected, and the
+  audit selects each tab by index before reading it, which is the only reason
+  section 10 can assert 91 controls deterministically.
+* **Two accents, not one.** `Accent` is structural; `Accent2` (green) is reserved
+  for "this value is live right now". Collapsing them into one colour would have
+  removed the only at-a-glance signal that telemetry is actually flowing.
+
+The `Quick` tab's telemetry block (`TxtPerfLatency`, `TxtPerfFps`,
+`TxtPerfVideo`, `TxtPerfAudio` plus the `PerfSpark` polyline) is the §C live
+panel: it parses the child process's `--game-telemetry-log` lines at 1 Hz, and
+`HintPerf` says so under the numbers, because a panel that reads `--` before a
+session starts otherwise looks broken. Third deviation: the directive asked for a
+*Performance tab*, and this is a panel on the landing tab instead. The reason is
+the same one that put the sparkline next to the launch buttons -- a number you
+have to click a tab to see is a number you watch while the game is already
+running, so it sits where the session is started. `README_GAMING.md` §9 says so
+in the user's terms rather than calling it a tab.
+
+Screenshots, both taken from the published single-file exe on this machine with
+`tools/launcher_shot.ps1`: `out/launcher_before.png` (light theme, one scrolling
+column, pre-§A) and `out/launcher_after.png` / `out/launcher_after_window.png`
+(dark, tabbed, language selector in the header, live command preview on the
+right; window rect `1380x788`). The earlier copy of `launcher_after.png` was
+stale and is what prompted the re-take: it showed `Enable ADB over TCP/IP` and a
+clipped `Connect (pport`, while `launcher/Loc.cs` now reads `Wireless ADB guide`
+and `Connect ip:port`. The label was the bug, not the rendering: the button only
+opens a guide, and §4.2 forbids the launcher from running `adb tcpip` itself, so
+a verb-first label promised a write it never performs. The re-taken shot also
+shows the §C fix in the preview line, which now ends
+`--game-osd=compact --game-telemetry-log` -- the flag the Performance panel
+needs and previously never got.
+
+Still visible in that shot and not fixed here: the status-bar `adb:` path is
+trimmed on the left (`gCapture\dist\...\adb.exe`) because the footer gives the
+path a fixed width. Cosmetic only -- the resolved path it prints is the real one
+used to launch, and section 11 proves a session starts from it.
+
 ### 5.2 CLI
 
 * `scrcpy.exe --version` and `--help` work from the packaged directory with a
@@ -1345,7 +1610,13 @@ when a phone is plugged in, the launcher driving it end-to-end (§5.1m) and the
 measured host-side latency sweep of §5.1n (that last section adds about two
 minutes, because it mirrors for real). Section 13 guards the constraint itself
 (§5.1o): it diffs `screen.c` against the upstream tag and scans the launcher for
-device-side flags, so it runs on any machine, with or without a phone.
+device-side flags, so it runs on any machine, with or without a phone. Section 14
+(§5.1s) greps the device-integrity blacklist over `tools/`, `launcher/` and the
+fork's added lines, and cannot pass silently because a fixture with three
+forbidden commands must be detected first. Section 15 (§5.1t, §5.1v) audits the
+localization table: unknown key, missing column, duplicate key, hardcoded
+literal. Section 16 (§5.1v) runs the per-filter pixel harness inside the gate,
+so a colour grade that does not move pixels fails the suite rather than shipping.
 
 ```
 summary

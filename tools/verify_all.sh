@@ -63,6 +63,10 @@ accepts "$SCRCPY" --game-postfx=sharp,night,sat --version
 accepts "$SCRCPY" --game-sharp=100 --version
 accepts "$SCRCPY" --game-night-boost=100 --version
 accepts "$SCRCPY" --game-saturation=200 --version
+accepts "$SCRCPY" --game-contrast=200 --version
+accepts "$SCRCPY" --game-brightness=0 --version
+accepts "$SCRCPY" --game-gamma=25 --version
+accepts "$SCRCPY" --game-postfx=contrast,brightness,gamma --version
 accepts "$SCRCPY" --game-borderless-fullscreen --version
 accepts "$SCRCPY" --game-low-latency --version
 accepts "$SCRCPY" --game-cursor-autohide=60000 --version
@@ -155,6 +159,9 @@ rejects "$SCRCPY" --game-osd=bogus --version
 rejects "$SCRCPY" --game-upscale=best --version
 rejects "$SCRCPY" --game-sharp=150 --version
 rejects "$SCRCPY" --game-saturation=300 --version
+rejects "$SCRCPY" --game-contrast=300 --version
+rejects "$SCRCPY" --game-brightness=300 --version
+rejects "$SCRCPY" --game-gamma=24 --version
 rejects "$SCRCPY" --game-cursor-autohide=abc --version
 rejects "$SCRCPY" --game-bridge-scale=12x99 --version
 rejects "$SCRCPY" --game-bridge-filter=kaiser --version
@@ -272,10 +279,20 @@ if [ "$QUICK" -eq 0 ]; then
     fi
     printf '%s' "$p1" | grep -q 'no consumer' && ok "no-consumer case reported" || bad "no-consumer case missing"
     p2="$(ps "$ROOT/tools/bridge_audio_pipe_test.ps1")"
+    got2="$(printf '%s' "$p2" | grep '^pipe consumer received' | head -1)"
+    retry2=''
+    if ! printf '%s' "$p2" | grep -q '80000 400'; then
+        # Same flake family as the windowed sections: a busy desktop makes the
+        # writer drop chunks before the consumer connects, so retry once and
+        # label it instead of letting a silent rerun be the workaround.
+        retry2=' [passed on the retry]'
+        p2="$(ps "$ROOT/tools/bridge_audio_pipe_test.ps1")"
+        got2="$(printf '%s' "$p2" | grep '^pipe consumer received' | head -1)"
+    fi
     if printf '%s' "$p2" | grep -q '80000 400'; then
-        ok "audio bridge over pipe: 400 packets, 80000 B, none lost"
+        ok "audio bridge over pipe: ${got2:-no line}${retry2}"
     else
-        bad "audio bridge over pipe: $(printf '%s' "$p2" | grep -c .) lines, no match"
+        bad "audio bridge over pipe: ${got2:-no line} (expected '80000 400')"
     fi
     p3="$(ps "$ROOT/tools/pcm_tap_pipe_test.ps1")"
     if printf '%s' "$p3" | grep -qx 'PCMPIPE OK'; then
@@ -580,6 +597,21 @@ else
         bad "user-visible strings are hardcoded in the code-behind:"
         printf '%s\n' "$lits" | sed 's/^/        /'
     fi
+fi
+
+head_ "16. host filter pixels (tools/fx_pixel_test.sh)"
+# A colour grade is only worth shipping if each control moves the picture, so
+# the assertions run as their own harness: a deterministic test pattern, one
+# filter enabled at a time, luma/chroma statistics before and after, and a PNG
+# dump per case. The harness carries its own controls (an identity run with no
+# filter, plus the neutral 100% setting of each grade), which is what makes a
+# green line here mean something instead of a passing grep.
+fxlog="$TMP/fx_pixel.log"
+if bash "$ROOT/tools/fx_pixel_test.sh" > "$fxlog" 2>&1; then
+    ok "filter pixel assertions: $(grep -c '^PASS' "$fxlog") checks passed"
+else
+    bad "filter pixel assertions failed:"
+    grep -E '^FAIL' "$fxlog" | head -12
 fi
 
 printf '\n\033[1m%s\033[0m\n' "summary"

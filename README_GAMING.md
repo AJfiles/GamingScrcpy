@@ -64,10 +64,13 @@ enter `ip:port` + 6-digit code), then **Connect ip:port**. For older devices use
 | `--game-osd=` | `none`, `compact`, `full` | On-screen telemetry drawn over the mirrored picture. `full` = FPS, target FPS, video/audio bitrate, latency current/avg/max, source size vs on-screen size, bridge + filter state. |
 | `--game-upscale=` | `default`, `nearest`, `linear`, `pixelart` | Host upscale filter for the mirror window. `pixelart` is SDL3's adaptive pixel-art scaler; `linear` is the smooth default; `nearest` keeps raw pixels. |
 | `--game-window-filter=` | `off`, `point`, `bilinear`, `fast`, `bicubic`, `lanczos` | Resample the **presented** picture to the exact size of the window content area on the host CPU (true Lanczos / bicubic kernels, not the GPU sampler), so the GPU blits 1:1. Sharper than `--game-upscale` at a CPU cost on the render thread; off by default, and the OSD shows `WIN` while it is active. Needs software decoding (`--hwdec=disabled`; with a hardware interop the GPU path is kept and a warning is logged). |
-| `--game-postfx=` | `sharp`, `night`, `sat` (comma list) | Enable CPU post-filters on the host copy of the decoded frame. |
+| `--game-postfx=` | `sharp`, `night`, `sat`, `contrast`, `brightness`, `gamma` (comma list) | Enable CPU post-filters on the host copy of the decoded frame. A filter only runs when its own name is here: naming `gamma` without `--game-gamma=` changes nothing instead of blacking out the picture. |
 | `--game-sharp=` | 0-100 | CAS-style luma sharpening strength (4-neighbour Laplacian unsharp mask, chroma untouched). |
 | `--game-night-boost=` | 0-100 | Shadow lift for dark maps: gamma up to 2.5 plus black-level lift. |
 | `--game-saturation=` | 0-200 | Colour grade on the mirrored picture (100 = unchanged). |
+| `--game-contrast=` | 0-200 | Luma contrast pivoted at mid grey (100 = unchanged). Shares one 256-entry table with brightness, gamma and night-boost, so the whole grade is a single pass over the Y plane. |
+| `--game-brightness=` | 0-200 | Luma offset, 100 = unchanged, 0 = black, 200 = white. Brightens the **PC's** picture: it never writes the device's screen brightness (guarded by `tools/device_filter_test.sh`, which compares a read-only `dumpsys display` snapshot before and after). |
+| `--game-gamma=` | 25-200 | Luma transfer curve, 100 = unchanged, above brightens the mid-tones. Below 25 is rejected: the curve would only crush the picture to black. |
 | `--game-borderless-fullscreen` | — | Borderless fullscreen sized to the monitor: no DWM frame, but still a normal window, so OBS **Window Capture** and Alt+Tab keep working. |
 | `--game-low-latency` | — | Turns off presentation vsync (lowest display latency; may tear). |
 | `--game-cursor-autohide=` | ms | Hides the PC cursor when idle, restores it on mouse move. |
@@ -96,6 +99,16 @@ hint, borderless fullscreen, window filter, OSD, frame bridge) through
 `direct3d11`, `opengl`, `vulkan` and the no-hint default, and fails if any backend
 is silently substituted or if the frame bridge differs by even one byte. There it
 is also visible that leaving the option unset selects `direct3d11`.
+
+**Which one to actually use, measured against the tablet.** `direct3d11` —
+`tools/device_latency_matrix.sh` measured the worst frame of each second over
+12 s windows and the backends are not equal: `direct3d11` 48-266 ms median,
+`vulkan` 1129/1150 ms, `opengl` 604/1607 ms (with and without
+`--game-low-latency`, all three still presenting at 54-62 fps). The first two
+columns are inside the run-to-run noise of this harness (the reference
+configuration alone measured 48, 166 and 198 ms), so only the backend gap is a
+conclusion the data supports: the other two backends work, they are just an
+order of magnitude slower to present on this GPU/driver combination.
 
 **Input modes, measured on this build.** The package ships a libusb build, so
 `--gamepad=aoa` is accepted and emulates a physical AOAv2 controller (USB only).
@@ -415,6 +428,22 @@ What still needs your hands and eyes:
     dropdown for it yet). For the reverse (PC silent, OBS still fed) use
     `--no-audio-playback`, which is what the `ChkPcmMute` checkbox appends
     together with the PCM tap.
+12. **Brighter dark games, without touching the tablet's settings** — every
+    picture filter (`--game-sharp`, `--game-night-boost`, `--game-saturation`,
+    `--game-contrast`, `--game-brightness`, `--game-gamma`) is applied on the PC
+    to a copy of the decoded frame. The tablet renders exactly what it always
+    did; its own brightness, resolution and DPI are never written. Where the
+    grade does and does not go: a `--record` file is built from the encoded
+    packets coming off the device, so it is never filtered, while
+    `--game-frame-bridge` ships the frame that is actually presented, so OBS
+    receives the graded picture. If you want the look only on your monitor and
+    not in OBS, grade in OBS instead. To see it on your hardware, mirror with
+    `--game-postfx=night,brightness --game-night-boost=60 --game-brightness=115`
+    and compare against the same scene without the flags. The automated proofs are
+    `bash tools/fx_pixel_test.sh` (per-filter pixel statistics, plus PNG dumps of
+    every setting under `out/fx/`) and, on a real device,
+    `bash tools/device_filter_test.sh`, which additionally asserts the tablet's
+    brightness state read before and after is identical.
 
 ### The read-only rule
 
@@ -536,6 +565,11 @@ FFmpeg-based consumers.
 
 ## 9. Launcher features
 
+* **Layout** — dark theme (`#0E0F13` on `#16181F`, one accent, monospaced
+  numbers) and seven tabs: **Quick**, **Capture**, **Presentation**, **Filters**,
+  **Recording / OBS**, **Control**, **Advanced**. Nothing was removed by the
+  redesign, only regrouped: 91 named controls are asserted present in the live
+  window by `tools/launcher_uiauto.ps1` (gate section 10).
 * **Device auto-detection** — `adb devices -l` plus `adb mdns services` for
   wireless-only devices; USB vs Wi-Fi classified; model read with `getprop`.
 * **Language** — Español / English selector in the header. Everything visible
@@ -544,9 +578,10 @@ FFmpeg-based consumers.
   remembered. Gate section 15 fails if a key is missing in either language.
 * **Device panel** — model, battery level and temperature, read with read-only
   `getprop` / `dumpsys battery`. Nothing in the launcher writes a device setting.
-* **Performance tab** — live latency / FPS / video and audio bitrate read from
-  the fork's `--game-telemetry-log` lines (the launcher adds that flag), with a
-  1 Hz latency sparkline.
+* **Live performance** — the `LIVE PERFORMANCE` block on the **Quick** tab (not a
+  separate tab, so it is visible the moment the launcher opens) shows latency /
+  FPS / video and audio bitrate read from the fork's `--game-telemetry-log`
+  lines, which the launcher always adds, plus a 1 Hz latency sparkline.
 * **Profile manager** — JSON presets in `%APPDATA%\GamingScrcpy\profiles`,
   seeded with ten profiles: *Competitive COD Mobile 120FPS*, *4K Ultra Quality
   Stream 60FPS*, *Recording Only*, *Night/Dark Game Boost*, plus **Lowest
@@ -569,7 +604,9 @@ FFmpeg-based consumers.
   audio output buffer (0…500 ms). A profile holding an off-step value is
   normalised to the nearest step before it runs, so the preview always shows the
   real command. Sliders stay only where a continuous value is meaningful (cursor
-  auto-hide, sharpness, shadow lift, saturation); dropdowns for codec, renderer,
+  auto-hide and the six picture filters: sharpness, shadow lift, saturation,
+  contrast, brightness, gamma — each with a numeric readout, a checkbox that
+  decides whether its flag is passed at all, and a `reset` button); dropdowns for codec, renderer,
   upscale filter,
   **window kernel** (`off` = GPU sampler, `lanczos`, `bicubic`, `bilinear`,
   `fast`, `point` — the CPU resample of the presented frame), host

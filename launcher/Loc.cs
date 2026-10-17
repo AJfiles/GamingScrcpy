@@ -146,7 +146,7 @@ namespace GamingScrcpyLauncher
             new[] { "SecFilters", "FILTROS DE IMAGEN (host)", "IMAGE FILTERS (HOST SIDE)" },
             new[] { "LblContrast", "Contraste %", "Contrast %" },
             new[] { "LblBrightness", "Brillo %", "Brightness %" },
-            new[] { "LblGamma", "Gamma", "Gamma" },
+            new[] { "LblGamma", "Gamma %", "Gamma %" },
             new[] { "LblSaturation", "Saturaci\u00f3n %", "Saturation %" },
             new[] { "LblSharpness", "Nitidez %", "Sharpness %" },
             new[] { "LblNightBoost", "Levante de sombras %", "Shadow lift %" },

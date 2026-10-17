@@ -99,8 +99,29 @@ namespace GamingScrcpyLauncher
             "sharp" => SldSharp,
             "night" => SldNight,
             "sat" => SldSat,
+            "contrast" => SldContrast,
+            "bright" => SldBright,
+            "gamma" => SldGamma,
             _ => null,
         };
+
+        private CheckBox? CheckFor(string which) => which switch
+        {
+            "sharp" => ChkFxSharp,
+            "night" => ChkFxNight,
+            "sat" => ChkFxSat,
+            "contrast" => ChkFxContrast,
+            "bright" => ChkFxBright,
+            "gamma" => ChkFxGamma,
+            _ => null,
+        };
+
+        private static readonly string[] GradeFilters =
+            { "sharp", "night", "sat", "contrast", "bright", "gamma" };
+
+        // the additive filters start from nothing, the percent ones from 100
+        private static double NeutralFor(string which) =>
+            which is "sharp" or "night" ? 0 : 100;
 
         private void OnResetFilter(object sender, RoutedEventArgs e)
         {
@@ -108,20 +129,13 @@ namespace GamingScrcpyLauncher
             {
                 return;
             }
-            switch (tag)
+            if (CheckFor(tag) is { } chk)
             {
-                case "sharp":
-                    ChkFxSharp.IsChecked = false;
-                    if (SliderFor("sharp") is { } s) s.Value = 0;
-                    break;
-                case "night":
-                    ChkFxNight.IsChecked = false;
-                    if (SliderFor("night") is { } n) n.Value = 0;
-                    break;
-                case "sat":
-                    ChkFxSat.IsChecked = false;
-                    if (SliderFor("sat") is { } t) t.Value = 100;
-                    break;
+                chk.IsChecked = false;
+            }
+            if (SliderFor(tag) is { } s)
+            {
+                s.Value = NeutralFor(tag);
             }
             PushConfig();
         }
@@ -132,21 +146,40 @@ namespace GamingScrcpyLauncher
             {
                 return;
             }
-            // (sharp, night, sat, enabled flags) -- all of these map to real
-            // fork flags today; nothing here is decorative.
-            (bool fx, double sharp, double night, double sat) p = tag switch
+            // Every number here maps to a real fork flag, and a profile only
+            // enables the filters it actually moves: each enabled filter costs
+            // host CPU on the frame path, so switching all six on for a look
+            // would add latency the user did not ask for.
+            (string[] On, Dictionary<string, double> Values) p = tag switch
             {
-                "vivid" => (true, 25, 15, 140),
-                "cinematic" => (true, 45, 55, 92),
-                "night" => (true, 20, 85, 110),
-                _ => (false, 0, 0, 100),
+                "vivid" => (new[] { "sharp", "sat", "contrast" },
+                            new Dictionary<string, double>
+                            { ["sharp"] = 30, ["sat"] = 135, ["contrast"] = 118 }),
+                "cinematic" => (new[] { "sharp", "night", "sat", "gamma", "contrast" },
+                            new Dictionary<string, double>
+                            {
+                                ["sharp"] = 45, ["night"] = 25, ["sat"] = 92,
+                                ["gamma"] = 115, ["contrast"] = 108,
+                            }),
+                "night" => (new[] { "sharp", "night", "bright", "gamma" },
+                            new Dictionary<string, double>
+                            {
+                                ["sharp"] = 20, ["night"] = 85, ["bright"] = 112,
+                                ["gamma"] = 130,
+                            }),
+                _ => (Array.Empty<string>(), new Dictionary<string, double>()),
             };
-            ChkFxSharp.IsChecked = p.fx;
-            ChkFxNight.IsChecked = p.fx;
-            ChkFxSat.IsChecked = p.fx;
-            if (SliderFor("sharp") is { } s) s.Value = p.sharp;
-            if (SliderFor("night") is { } n) n.Value = p.night;
-            if (SliderFor("sat") is { } t) t.Value = p.sat;
+            foreach (string name in GradeFilters)
+            {
+                if (CheckFor(name) is { } chk)
+                {
+                    chk.IsChecked = Array.IndexOf(p.On, name) >= 0;
+                }
+                if (SliderFor(name) is { } s)
+                {
+                    s.Value = p.Values.TryGetValue(name, out double v) ? v : NeutralFor(name);
+                }
+            }
             PushConfig();
         }
 
