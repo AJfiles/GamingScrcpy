@@ -154,6 +154,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition/><RowDefinition/><RowDefinition/>
                                     <RowDefinition/><RowDefinition/><RowDefinition/>
+                                    <RowDefinition/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="{DynamicResource LblVideoCodec}"
                                            Style="{StaticResource FieldLabel}"/>
@@ -169,18 +170,30 @@
                                            Text="{DynamicResource NoteDeviceHw}"/>
                                 <TextBlock Grid.Row="1" Text="{DynamicResource LblBitrate}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <Slider x:Name="SldBitrate" Grid.Row="1" Grid.Column="1"
-                                        Minimum="2" Maximum="96" TickFrequency="1" Value="16"
-                                        ValueChanged="OnSliderChanged"/>
+                                <ComboBox x:Name="CboBitrate" Grid.Row="1" Grid.Column="1"
+                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="1" Grid.Column="2" x:Name="LblBitrate"
-                                           Style="{StaticResource Num}" Text="16 Mb"/>
+                                           Style="{StaticResource Num}" Text="16 Mb/s"/>
+                                <TextBlock Grid.Row="6" Text="{DynamicResource LblEncoder}"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="CboEncoderPreset" Grid.Row="6" Grid.Column="1"
+                                          Margin="0,2" SelectionChanged="OnStepChanged"
+                                          ToolTip="{DynamicResource TipEncoderPreset}">
+                                    <ComboBoxItem Content="{DynamicResource ItemEncoderDefault}"/>
+                                    <ComboBoxItem Content="{DynamicResource ItemEncoderUltrafast}"/>
+                                    <ComboBoxItem Content="{DynamicResource ItemEncoderFast}"/>
+                                    <ComboBoxItem Content="{DynamicResource ItemEncoderMedium}"/>
+                                </ComboBox>
+                                <TextBlock Grid.Row="6" Grid.Column="2"
+                                           Style="{StaticResource Num}" FontFamily="Segoe UI"
+                                           Foreground="{StaticResource FgDim}"
+                                           Text="{DynamicResource NoteMediaCodec}"/>
                                 <TextBlock Grid.Row="2" Text="{DynamicResource LblMaxFps}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <Slider x:Name="SldMaxFps" Grid.Row="2" Grid.Column="1"
-                                        Minimum="15" Maximum="144" TickFrequency="1" Value="60"
-                                        ValueChanged="OnSliderChanged"/>
+                                <ComboBox x:Name="CboMaxFps" Grid.Row="2" Grid.Column="1"
+                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="2" Grid.Column="2" x:Name="LblMaxFps"
-                                           Style="{StaticResource Num}" Text="60"/>
+                                           Style="{StaticResource Num}" Text="60 fps"/>
                                 <TextBlock Grid.Row="3" Text="{DynamicResource LblAudioCodec}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboAudioCodec" Grid.Row="3" Grid.Column="1"
@@ -191,11 +204,10 @@
                                 </ComboBox>
                                 <TextBlock Grid.Row="4" Text="{DynamicResource LblAudioBitrate}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <Slider x:Name="SldAudioBitrate" Grid.Row="4" Grid.Column="1"
-                                        Minimum="32" Maximum="512" TickFrequency="16" Value="128"
-                                        ValueChanged="OnSliderChanged"/>
+                                <ComboBox x:Name="CboAudioBitrate" Grid.Row="4" Grid.Column="1"
+                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="4" Grid.Column="2" x:Name="LblAudioBitrate"
-                                           Style="{StaticResource Num}" Text="128"/>
+                                           Style="{StaticResource Num}" Text="128 kbps"/>
                                 <TextBlock Grid.Row="5" Text="{DynamicResource LblHwdec}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboHwdec" Grid.Row="5" Grid.Column="1"
@@ -277,18 +289,16 @@
                                 </ComboBox>
                                 <TextBlock Grid.Row="5" Text="{DynamicResource LblVideoBuffer}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <Slider x:Name="SldVideoBuffer" Grid.Row="5" Grid.Column="1"
-                                        Minimum="0" Maximum="200" Value="0"
-                                        ValueChanged="OnSliderChanged"/>
+                                <ComboBox x:Name="CboVideoBuffer" Grid.Row="5" Grid.Column="1"
+                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="5" Grid.Column="2" x:Name="LblVideoBuffer"
-                                           Style="{StaticResource Num}" Text="0"/>
+                                           Style="{StaticResource Num}" Text="0 ms"/>
                                 <TextBlock Grid.Row="6" Text="{DynamicResource LblAudioBuffer}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <Slider x:Name="SldAudioOutBuffer" Grid.Row="6" Grid.Column="1"
-                                        Minimum="0" Maximum="500" Value="120"
-                                        ValueChanged="OnSliderChanged"/>
+                                <ComboBox x:Name="CboAudioOutBuffer" Grid.Row="6" Grid.Column="1"
+                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="6" Grid.Column="2" x:Name="LblAudioOutBuffer"
-                                           Style="{StaticResource Num}" Text="120"/>
+                                           Style="{StaticResource Num}" Text="120 ms"/>
                             </Grid>
                             <WrapPanel Margin="0,8,0,0">
                                 <CheckBox x:Name="ChkLowLatency" Content="{DynamicResource ChkLowLatency}"

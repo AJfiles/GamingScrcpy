@@ -25,6 +25,13 @@ public sealed class AppConfig
     [JsonPropertyName("audioBitrateKbps")] public int AudioBitrateKbps { get; set; } = 128;
     [JsonPropertyName("audioSource")] public string AudioSource { get; set; } = "output";
 
+    /// <summary>
+    /// Encoder speed/quality bias, translated into the MediaFormat latency key.
+    /// Android has no x264-style preset; this is the knob the device encoder
+    /// actually exposes, and it may still ignore it.
+    /// </summary>
+    [JsonPropertyName("encoderPreset")] public string EncoderPreset { get; set; } = "default";
+
     // ---- buffers ----
     [JsonPropertyName("videoBufferMs")] public int VideoBufferMs { get; set; }
     [JsonPropertyName("audioBufferMs")] public int AudioBufferMs { get; set; } = 120;
@@ -129,6 +136,16 @@ public sealed class AppConfig
         _ => null, // auto: leave it to scrcpy
     };
 
+    // MediaFormat.KEY_LATENCY is a 0..9 bias, not an x264 preset: the device
+    // encoder decides what to do with it.
+    private static int EncoderLatency(string preset) => preset switch
+    {
+        "ultrafast" => 9,
+        "fast" => 7,
+        "medium" => 5,
+        _ => 0,
+    };
+
     private static readonly Dictionary<string, (int w, int h)> Presets = new()
     {
         ["fit"] = (0, 0),
@@ -171,13 +188,24 @@ public sealed class AppConfig
         {
             a.Add($"--video-encoder={VideoEncoder}");
         }
+        if (EncoderPreset is "ultrafast" or "fast" or "medium")
+        {
+            // MediaFormat.KEY_LATENCY: higher = "spend less time per frame"
+            // MediaFormat.KEY_LATENCY, spelled with scrcpy's key:type=value
+            // syntax (a plain key:value is rejected by the server)
+            a.Add($"--video-codec-options=latency:int={EncoderLatency(EncoderPreset)}");
+        }
         var hwdec = MapHwdec(Hwdec);
         if (hwdec != null)
         {
             a.Add($"--hwdec={hwdec}");
         }
         a.Add($"--audio-codec={AudioCodec}");
-        a.Add($"--audio-bit-rate={AudioBitrateKbps}K");
+        // raw PCM has no bitrate: scrcpy warns that the value is ignored
+        if (AudioCodec != "raw")
+        {
+            a.Add($"--audio-bit-rate={AudioBitrateKbps}K");
+        }
         if (!string.IsNullOrWhiteSpace(AudioSource) && AudioSource != "auto")
         {
             a.Add($"--audio-source={AudioSource}");

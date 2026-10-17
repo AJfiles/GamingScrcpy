@@ -538,14 +538,39 @@ FFmpeg-based consumers.
 
 * **Device auto-detection** — `adb devices -l` plus `adb mdns services` for
   wireless-only devices; USB vs Wi-Fi classified; model read with `getprop`.
+* **Language** — Español / English selector in the header. Everything visible
+  (labels, combo items, tooltips, status text, dialogs, the run log and the
+  command preview) comes from one table in `launcher/Loc.cs`, and the choice is
+  remembered. Gate section 15 fails if a key is missing in either language.
+* **Device panel** — model, battery level and temperature, read with read-only
+  `getprop` / `dumpsys battery`. Nothing in the launcher writes a device setting.
+* **Performance tab** — live latency / FPS / video and audio bitrate read from
+  the fork's `--game-telemetry-log` lines (the launcher adds that flag), with a
+  1 Hz latency sparkline.
 * **Profile manager** — JSON presets in `%APPDATA%\GamingScrcpy\profiles`,
-  seeded with *Competitive COD Mobile 120FPS*, *4K Ultra Quality Stream 60FPS*,
-  *Recording Only*, *Night/Dark Game Boost*. New/Load/Save/Delete.
+  seeded with ten profiles: *Competitive COD Mobile 120FPS*, *4K Ultra Quality
+  Stream 60FPS*, *Recording Only*, *Night/Dark Game Boost*, plus **Lowest
+  latency**, **Competitive 120 (host scale)**, **Balanced HEVC 60**, **Recording
+  only (clean)**, **Stream OBS (pipes)** and **Wi-Fi low bandwidth**.
+  New/Load/Save/Delete, plus Export/Import as JSON. Every one of them is checked
+  against the real `scrcpy.exe` by the launcher's own `--validate-profiles` mode.
+  None sets `--max-size`, `--crop` or a display id: the device keeps its own
+  resolution (see the note in §7 about doing that yourself).
 * **One-click launch** — Mirror, Mirror + auto-record, Record only (no window),
-  Stop, Enable TCP/IP, Pair wireless, Connect ip:port.
-* **Visual configurator** — sliders for bitrate (2-96 Mb), max FPS (15-144),
-  audio bitrate, video buffer, audio output buffer, cursor auto-hide, sharpness,
-  shadow lift, saturation; dropdowns for codec, renderer, upscale filter,
+  Stop, **Wireless ADB guide** (it shows the manual procedure instead of
+  reconfiguring the device), Pair wireless, Connect ip:port.
+* **Encoder preset** — `device default / ultrafast / fast / medium`, emitted as
+  `--video-codec-options=latency:int=N` (MediaFormat's latency key, the closest
+  Android equivalent of an x264 preset; a hardware encoder may ignore it). The
+  `key:type=value` spelling matters: `latency:9` alone is rejected by the server.
+* **Visual configurator** — discrete dropdowns where an invalid value would be a
+  silent bug: max FPS (15/20/25/30/40/50/60/90/120/144), video bitrate
+  (5…80 Mb/s in 5s), video buffer (0…200 ms), audio bitrate (32…512 kbps),
+  audio output buffer (0…500 ms). A profile holding an off-step value is
+  normalised to the nearest step before it runs, so the preview always shows the
+  real command. Sliders stay only where a continuous value is meaningful (cursor
+  auto-hide, sharpness, shadow lift, saturation); dropdowns for codec, renderer,
+  upscale filter,
   **window kernel** (`off` = GPU sampler, `lanczos`, `bicubic`, `bilinear`,
   `fast`, `point` — the CPU resample of the presented frame), host
   target size (1080p/1440p/4K/portrait), fit mode, OSD level, container,

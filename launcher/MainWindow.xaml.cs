@@ -20,6 +20,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         ProfileStore.SeedDefaults();
         _suppress = true;
+        PopulateSteps();
         SetDefaults();
         _suppress = false;
         RefreshProfiles();
@@ -112,6 +113,69 @@ public partial class MainWindow : Window
     private static string Cb(ComboBox box) =>
         box.SelectedItem is ComboBoxItem item ? item.Content.ToString() ?? "" : "";
 
+    // ---- discrete numeric steps (directive v2 §E) ----
+    // The UI cannot reach a value outside these lists, and the binary is
+    // validated against exactly this set (--validate-profiles), so "17 fps" or
+    // "23 Mbps" are not offerable mistakes any more.
+    private static readonly int[] FpsSteps =
+        { 15, 20, 25, 30, 40, 50, 60, 90, 120, 144 };
+    private static readonly int[] BitrateSteps =
+        { 5, 10, 15, 20, 25, 30, 40, 50, 60, 80 };
+    private static readonly int[] AudioBitrateSteps =
+        { 32, 48, 64, 96, 128, 160, 192, 256, 320, 512 };
+    private static readonly int[] VideoBufferSteps =
+        { 0, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200 };
+    private static readonly int[] AudioOutBufferSteps =
+        { 0, 40, 60, 80, 100, 120, 160, 200, 300, 400, 500 };
+
+    private void PopulateSteps()
+    {
+        FillStepBox(CboBitrate, BitrateSteps);
+        FillStepBox(CboMaxFps, FpsSteps);
+        FillStepBox(CboAudioBitrate, AudioBitrateSteps);
+        FillStepBox(CboVideoBuffer, VideoBufferSteps);
+        FillStepBox(CboAudioOutBuffer, AudioOutBufferSteps);
+    }
+
+    private static void FillStepBox(ComboBox box, int[] steps)
+    {
+        box.Items.Clear();
+        foreach (var v in steps)
+        {
+            box.Items.Add(new ComboBoxItem { Content = v.ToString() });
+        }
+    }
+
+    private static int CbStep(ComboBox box, int fallback) =>
+        box.SelectedItem is ComboBoxItem item &&
+        int.TryParse(item.Content.ToString(), out var v) ? v : fallback;
+
+    // an old profile may hold a value the steps no longer offer: pick the
+    // nearest allowed one and write it back, so the preview shows what will run
+    private static int SelectStep(ComboBox box, int[] steps, int wanted)
+    {
+        var best = steps[0];
+        foreach (var s in steps)
+        {
+            if (Math.Abs(s - wanted) < Math.Abs(best - wanted))
+            {
+                best = s;
+            }
+        }
+        box.SelectedIndex = Array.IndexOf(steps, best);
+        return best;
+    }
+
+    private void OnStepChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppress)
+        {
+            return;
+        }
+        RefreshLabels();
+        UpdateCommandPreview();
+    }
+
     private static string CbValue(ComboBox box, params string[] values)
     {
         var i = box.SelectedIndex;
@@ -127,14 +191,15 @@ public partial class MainWindow : Window
             : c.Serial;
 
         c.VideoCodec = CbValue(CboVideoCodec, "h264", "hevc", "av1");
-        c.BitrateMbps = (int) Math.Round(SldBitrate.Value);
-        c.MaxFps = (int) Math.Round(SldMaxFps.Value);
+        c.BitrateMbps = CbStep(CboBitrate, c.BitrateMbps);
+        c.MaxFps = CbStep(CboMaxFps, c.MaxFps);
+        c.EncoderPreset = CbValue(CboEncoderPreset, "default", "ultrafast", "fast", "medium");
         c.AudioCodec = CbValue(CboAudioCodec, "opus", "aac", "raw");
-        c.AudioBitrateKbps = (int) Math.Round(SldAudioBitrate.Value);
+        c.AudioBitrateKbps = CbStep(CboAudioBitrate, c.AudioBitrateKbps);
         c.Hwdec = CbValue(CboHwdec, "auto", "disabled", "d3d11va");
 
-        c.VideoBufferMs = (int) Math.Round(SldVideoBuffer.Value);
-        c.AudioOutputBufferMs = (int) Math.Round(SldAudioOutBuffer.Value);
+        c.VideoBufferMs = CbStep(CboVideoBuffer, c.VideoBufferMs);
+        c.AudioOutputBufferMs = CbStep(CboAudioOutBuffer, c.AudioOutputBufferMs);
 
         c.RenderDriver = CbValue(CboDriver, "direct3d11", "opengl", "vulkan", "default");
         c.Upscale = CbValue(CboUpscale, "linear", "pixelart", "nearest", "default");
@@ -200,11 +265,14 @@ public partial class MainWindow : Window
         SelectByValue(CboMouse, c.MouseMode, "auto", "sdk", "uhid", "aoa", "disabled");
         SelectByValue(CboGamepad, c.GamepadMode, "disabled", "uhid", "aoa");
 
-        SldBitrate.Value = c.BitrateMbps;
-        SldMaxFps.Value = c.MaxFps;
-        SldAudioBitrate.Value = c.AudioBitrateKbps;
-        SldVideoBuffer.Value = c.VideoBufferMs;
-        SldAudioOutBuffer.Value = c.AudioOutputBufferMs;
+        c.BitrateMbps = SelectStep(CboBitrate, BitrateSteps, c.BitrateMbps);
+        c.MaxFps = SelectStep(CboMaxFps, FpsSteps, c.MaxFps);
+        c.AudioBitrateKbps = SelectStep(CboAudioBitrate, AudioBitrateSteps, c.AudioBitrateKbps);
+        c.VideoBufferMs = SelectStep(CboVideoBuffer, VideoBufferSteps, c.VideoBufferMs);
+        c.AudioOutputBufferMs =
+            SelectStep(CboAudioOutBuffer, AudioOutBufferSteps, c.AudioOutputBufferMs);
+        SelectByValue(CboEncoderPreset, c.EncoderPreset,
+                      "default", "ultrafast", "fast", "medium");
         SldCursorHide.Value = c.CursorAutohideMs;
         SldSharp.Value = c.Sharpness;
         SldNight.Value = c.NightBoost;
@@ -256,19 +324,21 @@ public partial class MainWindow : Window
         {
             return;
         }
-        LblBitrate.Text = $"{(int) SldBitrate.Value} Mb";
-        LblMaxFps.Text = $"{(int) SldMaxFps.Value}";
-        LblAudioBitrate.Text = $"{(int) SldAudioBitrate.Value}";
-        LblVideoBuffer.Text = $"{(int) SldVideoBuffer.Value}";
-        LblAudioOutBuffer.Text = $"{(int) SldAudioOutBuffer.Value}";
+        LblBitrate.Text = Loc.Format("UnitMbps", CbStep(CboBitrate, _cfg.BitrateMbps));
+        LblMaxFps.Text = Loc.Format("UnitFps", CbStep(CboMaxFps, _cfg.MaxFps));
+        LblAudioBitrate.Text =
+            Loc.Format("UnitKbps", CbStep(CboAudioBitrate, _cfg.AudioBitrateKbps));
+        LblVideoBuffer.Text = Loc.Format("UnitMs", CbStep(CboVideoBuffer, _cfg.VideoBufferMs));
+        LblAudioOutBuffer.Text =
+            Loc.Format("UnitMs", CbStep(CboAudioOutBuffer, _cfg.AudioOutputBufferMs));
         LblCursorHide.Text = $"{(int) SldCursorHide.Value}";
         LblSharp.Text = $"{(int) SldSharp.Value}";
         LblNight.Text = $"{(int) SldNight.Value}";
         LblSat.Text = $"{(int) SldSat.Value}";
         LblCodecNote.Text = Cb(CboVideoCodec).Contains("av1", StringComparison.OrdinalIgnoreCase)
-            ? "needs AV1 encoder"
+            ? Loc.T("NoteAv1")
             : Cb(CboVideoCodec).Contains("hevc", StringComparison.OrdinalIgnoreCase)
-                ? "needs HEVC encoder" : "device HW";
+                ? Loc.T("NoteHevc") : Loc.T("NoteDeviceHw");
     }
 
     private void UpdateCommandPreview()
@@ -287,7 +357,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshDevicesAsync()
     {
-        Log("scanning adb devices");
+        Log(Loc.T("LogScanning"));
         _devices = await Adb.ListDevicesAsync();
         DeviceCombo.Items.Clear();
         foreach (var d in _devices)
@@ -298,22 +368,22 @@ public partial class MainWindow : Window
         {
             DeviceCombo.SelectedIndex = 0;
             var first = _devices[0];
-            DeviceBadge.Text = $"{_devices.Count} device(s)";
-            Log($"detected: {first.Display} state={first.State}");
+            DeviceBadge.Text = Loc.Format("BadgeDevices", _devices.Count);
+            Log(Loc.Format("LogDetected", first.Display, first.State));
             if (!first.IsWireless && first.State == "device")
             {
                 var model = await Adb.GetDevicePropAsync(first.Serial,
                     "ro.product.model");
                 if (!string.IsNullOrWhiteSpace(model))
                 {
-                    Log($"device model: {model}");
+                    Log(Loc.Format("LogDeviceModel", model));
                 }
             }
         }
         else
         {
-            DeviceBadge.Text = "no device";
-            Log("no adb device found (connect by USB, or pair wirelessly)");
+            DeviceBadge.Text = Loc.T("BadgeNoDevice");
+            Log(Loc.T("LogNoDevice"));
         }
         UpdateCommandPreview();
     }
@@ -347,14 +417,14 @@ public partial class MainWindow : Window
             return;
         }
         var (rc, output) = await Adb.PairAsync(hostPort.Trim(), code6.Trim());
-        Log($"adb pair -> {output}");
+        Log(Loc.Format("LogPair", output));
         if (rc == 0)
         {
             var connect = Prompt("Connected", "Enter the debugging ip:port shown on the Wireless debugging screen:", "192.168.1.20:5555");
             if (connect != null)
             {
                 var (_, o2) = await Adb.ConnectAsync(connect.Trim());
-                Log($"adb connect -> {o2}");
+                Log(Loc.Format("LogConnect", o2));
             }
         }
         await RefreshDevicesAsync();
@@ -369,7 +439,7 @@ public partial class MainWindow : Window
             return;
         }
         var (_, output) = await Adb.ConnectAsync(hostPort.Trim());
-        Log($"adb connect -> {output}");
+        Log(Loc.Format("LogConnect", output));
         await RefreshDevicesAsync();
     }
 
@@ -377,10 +447,8 @@ public partial class MainWindow : Window
     {
         if (_devices.Count == 0 || DeviceCombo.SelectedIndex < 0)
         {
-            MessageBox.Show(this,
-                "No device selected. Connect a phone (USB debugging enabled) or "
-                + "pair one over Wi-Fi first.", "Gaming Scrcpy",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, Loc.T("DlgNoDeviceBody"), Loc.T("AppName"),
+                            MessageBoxButton.OK, MessageBoxImage.Information);
             return null;
         }
         return _devices[DeviceCombo.SelectedIndex].Serial;
@@ -403,17 +471,16 @@ public partial class MainWindow : Window
     {
         if (_scrcpy is { HasExited: false })
         {
-            Log("already running - stop it first");
+            Log(Loc.T("LogAlreadyRunning"));
             return;
         }
         var exe = ResolveScrcpyPath();
         if (exe == null)
         {
             MessageBox.Show(this,
-                "scrcpy.exe not found. Put GamingScrcpyLauncher.exe next to the "
-                + "scrcpy package, or write {\"scrcpy\": \"C:\\\\path\\\\scrcpy.exe\"} "
-                + "into " + Path.Combine(ProfileStore.Root, "settings.json"),
-                "Gaming Scrcpy", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Loc.Format("DlgNoExeBody",
+                    Path.Combine(ProfileStore.Root, "settings.json")),
+                Loc.T("AppName"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -449,22 +516,22 @@ public partial class MainWindow : Window
             psi.ArgumentList.Add(a);
         }
 
-        Log("launch: " + string.Join(" ", args));
+        Log(Loc.Format("LogLaunch", string.Join(" ", args)));
         try
         {
             _scrcpy = Process.Start(psi);
         }
         catch (Exception ex)
         {
-            Log("failed to start scrcpy: " + ex.Message);
+            Log(Loc.Format("LogStartFailed", ex.Message));
             return;
         }
         if (_scrcpy == null)
         {
-            Log("failed to start scrcpy");
+            Log(Loc.T("LogStartFailedPlain"));
             return;
         }
-        TxtStatus.Text = noWindow ? "recording" : "mirroring";
+        TxtStatus.Text = Loc.T(noWindow ? "StatusRecording" : "StatusMirroring");
         _scrcpy.OutputDataReceived += (_, ev) =>
         {
             if (ev.Data != null)
@@ -484,12 +551,13 @@ public partial class MainWindow : Window
         _scrcpy.EnableRaisingEvents = true;
         _scrcpy.Exited += (_, _) => Dispatcher.Invoke(() =>
         {
-            TxtStatus.Text = $"stopped (exit {_scrcpy?.ExitCode})";
-            Log($"scrcpy exited with code {_scrcpy?.ExitCode}");
+            string exit = ((int?) _scrcpy?.ExitCode)?.ToString() ?? "?";
+            TxtStatus.Text = Loc.Format("StatusStoppedExit", exit);
+            Log(Loc.Format("LogExitCode", exit));
             if (record && File.Exists(cfg.RecordPath))
             {
                 var bytes = new FileInfo(cfg.RecordPath).Length;
-                Log($"recording kept: {cfg.RecordPath} ({bytes:N0} bytes)");
+                Log(Loc.Format("LogRecordingKept", cfg.RecordPath, bytes.ToString("N0")));
             }
         });
         await Task.CompletedTask;
@@ -500,7 +568,7 @@ public partial class MainWindow : Window
         if (_scrcpy is { HasExited: false })
         {
             _scrcpy.Kill(entireProcessTree: true);
-            Log("stop requested");
+            Log(Loc.T("LogStopRequested"));
         }
     }
 
@@ -549,7 +617,7 @@ public partial class MainWindow : Window
         if (cfg != null)
         {
             Apply(cfg);
-            Log($"loaded profile {cfg.Name}");
+            Log(Loc.Format("LogProfileLoaded", cfg.Name));
         }
     }
 
@@ -578,16 +646,16 @@ public partial class MainWindow : Window
         cfg.Name = name.Trim();
         ProfileStore.SaveProfile(cfg);
         RefreshProfiles(name.Trim() + ".json");
-        Log($"saved profile {cfg.Name}");
+        Log(Loc.Format("LogProfileSaved", cfg.Name));
         UpdateCommandPreview();
     }
 
     private void OnNewProfile(object sender, RoutedEventArgs e)
     {
-        var cfg = new AppConfig { Name = "New profile" };
+        var cfg = new AppConfig { Name = Loc.T("ProfileNew") };
         Apply(cfg);
         TxtProfileName.Text = cfg.Name;
-        Log("new profile started (Save it when ready)");
+        Log(Loc.T("LogNewProfile"));
     }
 
     private void OnDeleteProfile(object sender, RoutedEventArgs e)
@@ -596,15 +664,16 @@ public partial class MainWindow : Window
         {
             return;
         }
-        if (MessageBox.Show(this, $"Delete profile {file}?", "Confirm",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) !=
+        if (MessageBox.Show(this, Loc.Format("ConfirmDeleteProfile", file),
+                            Loc.T("ConfirmTitle"),
+                            MessageBoxButton.YesNo, MessageBoxImage.Question) !=
             MessageBoxResult.Yes)
         {
             return;
         }
         File.Delete(Path.Combine(ProfileStore.ProfilesDir, file));
         RefreshProfiles();
-        Log($"deleted {file}");
+        Log(Loc.Format("LogDeleted", file));
     }
 
     private void OnApplyKeymap(object sender, RoutedEventArgs e)
@@ -616,7 +685,7 @@ public partial class MainWindow : Window
         var km = ProfileStore.LoadKeymap(file);
         if (km == null)
         {
-            Log("keymap could not be parsed");
+            Log(Loc.T("LogKeymapBad"));
             return;
         }
         var cfg = Collect();
@@ -628,8 +697,8 @@ public partial class MainWindow : Window
         _cfg = cfg;
         Apply(cfg);
         ShowKeymap(km);
-        Log($"applied keymap {km.Name} (keyboard={km.KeyboardMode} "
-            + $"mouse={km.MouseMode} gamepad={km.GamepadMode})");
+        Log(Loc.Format("LogKeymapApplied", km.Name, km.KeyboardMode,
+                       km.MouseMode, km.GamepadMode));
     }
 
     private void ShowKeymap(Keymap km)
@@ -716,14 +785,14 @@ public partial class MainWindow : Window
         {
             TxtFrameBridge.Text = @"\\.\pipe\gaming-frame";
         }
-        Log("frame bridge will resample to " + size + " on its own thread");
+        Log(Loc.Format("LogBridgeResample", size));
         UpdateCommandPreview();
     }
 
     private void OnCopyCommand(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(TxtCommand.Text);
-        Log("command line copied to clipboard");
+        Log(Loc.T("LogCopiedCommand"));
     }
 
     private void OnCopyObsCommand(object sender, RoutedEventArgs e)
@@ -771,7 +840,7 @@ public partial class MainWindow : Window
                           "\" -f wasapi \"CABLE Output\"");
         }
         Clipboard.SetText(sb.ToString());
-        Log("OBS / FFmpeg consumer commands copied to clipboard");
+        Log(Loc.T("LogCopiedObs"));
     }
 
     private void Log(string line)

@@ -62,13 +62,13 @@ try {
                                         'BtnStop','TxtDeviceModel','TxtDeviceBattery',
                                         'TxtDeviceTemp','TxtPerfLatency','TxtPerfFps',
                                         'TxtPerfVideo','TxtPerfAudio') }
-        @{ key='TabCapture';      ids=@('CboVideoCodec','SldBitrate','LblBitrate',
-                                        'SldMaxFps','LblMaxFps','CboAudioCodec',
-                                        'SldAudioBitrate','LblAudioBitrate','CboHwdec',
-                                        'LblCodecNote') }
+        @{ key='TabCapture';      ids=@('CboVideoCodec','CboBitrate','LblBitrate',
+                                        'CboMaxFps','LblMaxFps','CboAudioCodec',
+                                        'CboAudioBitrate','LblAudioBitrate','CboHwdec',
+                                        'LblCodecNote','CboEncoderPreset') }
         @{ key='TabPresentation'; ids=@('CboDriver','CboUpscale','CboWindowFilter',
-                                        'CboHostPreset','CboRenderFit','SldVideoBuffer',
-                                        'LblVideoBuffer','SldAudioOutBuffer',
+                                        'CboHostPreset','CboRenderFit','CboVideoBuffer',
+                                        'LblVideoBuffer','CboAudioOutBuffer',
                                         'LblAudioOutBuffer','ChkLowLatency',
                                         'ChkBorderless','ChkAlwaysOnTop','ChkMipmaps',
                                         'ChkTouchViz','CboOsd','SldCursorHide',

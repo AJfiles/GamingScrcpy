@@ -257,6 +257,98 @@ namespace GamingScrcpyLauncher
             new[] { "SecShortcuts", "ATAJOS", "SHORTCUTS" },
             new[] { "HintShortcutsOverlay", "Pulsa F1 aqu\u00ed o en la ventana del espejo para ver los atajos",
                     "Press F1 here or in the mirror window to list the shortcuts" },
+
+            // ---- runtime messages (log panel, status, dialogs) ----
+            // nothing user-visible may be built in the code-behind: the log
+            // panel and the dialogs are part of the UI as much as a label is.
+            new[] { "AppName", "Gaming Scrcpy", "Gaming Scrcpy" },
+            new[] { "ConfirmTitle", "Confirmar", "Confirm" },
+            new[] { "LogScanning", "escaneando dispositivos adb", "scanning adb devices" },
+            new[] { "LogDetected", "detectado: {0} estado={1}", "detected: {0} state={1}" },
+            new[] { "LogDeviceModel", "modelo del dispositivo: {0}", "device model: {0}" },
+            new[] { "LogNoDevice",
+                    "no se detect\u00f3 ning\u00fan dispositivo adb "
+                    + "(conecta por USB o empareja por Wi-Fi)",
+                    "no adb device found (connect by USB, or pair wirelessly)" },
+            new[] { "LogPair", "emparejamiento inal\u00e1mbrico -> {0}", "wireless pair -> {0}" },
+            new[] { "LogConnect", "conexi\u00f3n inal\u00e1mbrica -> {0}", "wireless connect -> {0}" },
+            new[] { "LogAlreadyRunning",
+                    "ya se est\u00e1 ejecutando - detenlo primero",
+                    "already running - stop it first" },
+            new[] { "LogLaunch", "lanzando: {0}", "launching: {0}" },
+            new[] { "LogStartFailed",
+                    "no se pudo iniciar scrcpy: {0}", "failed to start scrcpy: {0}" },
+            new[] { "LogStartFailedPlain",
+                    "no se pudo iniciar scrcpy", "failed to start scrcpy" },
+            new[] { "StatusRecording", "grabando", "recording" },
+            new[] { "StatusMirroring", "espejando", "mirroring" },
+            new[] { "StatusStoppedExit", "detenido (salida {0})", "stopped (exit {0})" },
+            new[] { "LogExitCode",
+                    "scrcpy termin\u00f3 con c\u00f3digo {0}", "scrcpy exited with code {0}" },
+            new[] { "LogRecordingKept",
+                    "grabaci\u00f3n conservada: {0} ({1} bytes)",
+                    "recording kept: {0} ({1} bytes)" },
+            new[] { "LogStopRequested", "paro solicitado", "stop requested" },
+            new[] { "LogProfileLoaded",
+                    "perfil cargado: {0}", "loaded profile {0}" },
+            new[] { "LogProfileSaved", "perfil guardado: {0}", "saved profile {0}" },
+            new[] { "ProfileNew", "Perfil nuevo", "New profile" },
+            new[] { "LogNewProfile",
+                    "perfil nuevo iniciado (gu\u00e1rdalo cuando est\u00e9 listo)",
+                    "new profile started (Save it when ready)" },
+            new[] { "ConfirmDeleteProfile",
+                    "\u00bfEliminar el perfil {0}?", "Delete profile {0}?" },
+            new[] { "LogDeleted", "eliminado: {0}", "deleted {0}" },
+            new[] { "LogKeymapBad",
+                    "el keymap no se ha podido analizar", "keymap could not be parsed" },
+            new[] { "LogKeymapApplied",
+                    "keymap aplicado: {0} (teclado={1} rat\u00f3n={2} mando={3})",
+                    "applied keymap {0} (keyboard={1} mouse={2} gamepad={3})" },
+            new[] { "LogBridgeResample",
+                    "el puente de v\u00eddeo reescalar\u00e1 a {0} en su propio hilo",
+                    "frame bridge will resample to {0} on its own thread" },
+            new[] { "LogCopiedCommand",
+                    "l\u00ednea de comandos copiada al portapapeles",
+                    "command line copied to clipboard" },
+            new[] { "LogCopiedObs",
+                    "recetas de OBS / FFmpeg copiadas al portapapeles",
+                    "OBS / FFmpeg consumer commands copied to clipboard" },
+            new[] { "DlgNoDeviceBody",
+                    "Ning\u00fan dispositivo seleccionado. Conecta un tel\u00e9fono "
+                    + "(con depuraci\u00f3n USB activada) o empareja uno por Wi-Fi antes.",
+                    "No device selected. Connect a phone (USB debugging enabled) or "
+                    + "pair one over Wi-Fi first." },
+            new[] { "DlgNoExeBody",
+                    "No se encuentra scrcpy.exe. Coloca GamingScrcpyLauncher.exe "
+                    + "junto al paquete de scrcpy, o escribe "
+                    + "{{\"scrcpy\": \"C:\\\\path\\\\scrcpy.exe\"}} en {0}.",
+                    "scrcpy.exe not found. Put GamingScrcpyLauncher.exe next to the "
+                    + "scrcpy package, or write "
+                    + "{{\"scrcpy\": \"C:\\\\path\\\\scrcpy.exe\"}} into {0}." },
+            new[] { "NoteAv1", "necesita codificador AV1", "needs AV1 encoder" },
+            new[] { "NoteHevc", "necesita codificador HEVC", "needs HEVC encoder" },
+
+            // ---- discrete numeric steps + encoder preset ----
+            new[] { "LblEncoder", "Preset del codificador", "Encoder preset" },
+            new[] { "TipEncoderPreset",
+                    "Se traduce a la clave latency de MediaFormat "
+                    + "(--video-codec-options=latency:N): m\u00e1s alta = menos "
+                    + "tiempo por cuadro, menos calidad por bit. El codificador "
+                    + "del dispositivo puede ignorarla.",
+                    "Maps to the MediaFormat latency key "
+                    + "(--video-codec-options=latency:N): higher means less time "
+                    + "per frame and less quality per bit. The device encoder may "
+                    + "ignore it." },
+            new[] { "ItemEncoderDefault", "el del dispositivo", "device default" },
+            new[] { "ItemEncoderUltrafast", "ultrafast (latencia 9)",
+                    "ultrafast (latency 9)" },
+            new[] { "ItemEncoderFast", "fast (latencia 7)", "fast (latency 7)" },
+            new[] { "ItemEncoderMedium", "medium (latencia 5)", "medium (latency 5)" },
+            new[] { "NoteMediaCodec", "MediaFormat", "MediaFormat" },
+            new[] { "UnitMbps", "{0} Mb/s", "{0} Mb/s" },
+            new[] { "UnitFps", "{0} fps", "{0} fps" },
+            new[] { "UnitKbps", "{0} kbps", "{0} kbps" },
+            new[] { "UnitMs", "{0} ms", "{0} ms" },
         };
 
         // static on purpose: the table is filled while the singleton below is
@@ -324,7 +416,11 @@ namespace GamingScrcpyLauncher
             var map = language == Es ? esIndex : enIndex;
             foreach (var pair in map)
             {
-                current[pair.Key] = Table[pair.Value][language == Es ? 1 : 2];
+                string value = Table[pair.Value][language == Es ? 1 : 2];
+                // an empty translation must be loud: the UI Automation audit
+                // fails on "???", so a missing column cannot ship as an
+                // English label inside a Spanish panel
+                current[pair.Key] = string.IsNullOrEmpty(value) ? "??? " + pair.Key : value;
             }
             ApplyResources();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item"));

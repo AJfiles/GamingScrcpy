@@ -1,0 +1,6 @@
+# POSITIVE-CONTROL FIXTURE for gate section 15.
+# This file is supposed to FAIL the localization key check: it references keys
+# that deliberately do not exist in launcher/Loc.cs. If section 15 does not
+# report exactly these two as missing, its grep is broken.
+{DynamicResource KeyThatDoesNotExist}
+{DynamicResource AnotherMissingKey}

@@ -1161,6 +1161,114 @@ asking for the *resource key* `BtnRescan`. After the fix the audit is green with
 71 assertions. The lesson is the same one §5.1k recorded about screenshots: a
 check that quietly depends on a display state is not a check.
 
+### 5.1t Finishing the i18n contract: the log panel, the dialogs, and two checks
+
+The XAML was already 100 % resource-driven, but §B's "cero strings hardcodeados"
+was not yet true: the code-behind still wrote English into the log panel, the
+status label and three dialogs. That text is as user-visible as a label, so it
+now goes through `Loc`.
+
+What changed:
+
+* `Loc.cs` grew a runtime-message block (log lines, status values, dialog
+  bodies, the codec note) — the table is now **211 keys, each with both columns**.
+* `MainWindow.xaml.cs`: 32 sites rewritten to `Loc.T` / `Loc.Format`. Verified by
+  grep: zero `Log("<letter>` or `MessageBox.Show(this, "` left in either partial.
+* The mirror window's title argument (`AppConfig.cs:326`, `--window-title`) stays
+  English on purpose. It is visible in the taskbar, but OBS and the
+  window-capture recipes select that window **by name**; localizing it would make
+  a streamer's scene stop finding the mirror. A deliberate exception, recorded
+  here rather than left as an unexplained string.
+* An empty translation column is now loud instead of silent: `Rebuild()` renders
+  a missing value as `??? KEY`, and the UI Automation audit already fails on
+  `???` in a control name. So a key added with only one language filled in shows
+  up as a failed check rather than as English inside a Spanish panel.
+
+Two new gate checks (section 15), both with positive controls:
+
+* **key parity**: every `{DynamicResource KEY}` in the XAML must exist in `Loc`
+  (149 references, 0 missing). The same comparison run against
+  `tools/fixtures/localization_missing_key.txt` must report exactly its 2 unknown
+  keys, so a broken grep cannot pass. The check also asserts that no key is
+  declared twice.
+* **no hardcoded UI text**: the literal scan must match
+  `tools/fixtures/localization_literal_log.cs` and must find nothing in
+  `launcher/MainWindow.xaml.cs` / `MainWindow.Localized.cs`.
+
+What those checks immediately caught was **two duplicate keys in the table** —
+`NoteDeviceHw` and `StatusStopped` — introduced by the new rows colliding with
+existing ones. A duplicate is worse than a missing one because the second row
+silently shadows the first: `StatusStopped` was defined both as "Stopped" and as
+"stopped (exit {0})", so one of the two call sites would have rendered the wrong
+text. `StatusStoppedExit` is now the parameterised key. The scan also flagged the
+first version of its own regex (`Log\("\)`), which matches nothing but the empty
+string; the fixture control failed loudly, which is exactly why it exists.
+
+### 5.1u Discrete numeric controls (§E), an encoder preset, and six profiles (§F)
+
+**§E: no intermediate value is reachable any more.** Five sliders became
+ComboBoxes populated from fixed step arrays in
+`launcher/MainWindow.xaml.cs`:
+
+| control | steps offered |
+|---|---|
+| `CboMaxFps` | 15, 20, 25, 30, 40, 50, 60, 90, 120, 144 |
+| `CboBitrate` | 5, 10, 15, 20, 25, 30, 40, 50, 60, 80 Mb/s |
+| `CboVideoBuffer` | 0, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200 ms |
+| `CboAudioBitrate` | 32, 48, 64, 96, 128, 160, 192, 256, 320, 512 kbps |
+| `CboAudioOutBuffer` | 0, 40, 60, 80, 100, 120, 160, 200, 300, 400, 500 ms |
+
+An old profile holding an off-step value (say 17 fps) is normalised to the
+nearest allowed step by `SelectStep`, and the *normalised* value is written back
+into the config, so the command preview always shows what will actually run. The
+readouts (`LblBitrate`, `LblMaxFps`, …) became localized unit captions
+(`{0} Mb/s`, `{0} fps`, …) because the combo itself now shows the number.
+`tools/launcher_uiauto.ps1` was updated in the same change: the Capture and
+Presentation tab lists now ask for the combo ids plus `CboEncoderPreset`.
+
+**Encoder preset (`CboEncoderPreset`), and the bug the tablet caught.** The
+directive asks for "ultrafast / fast / medium". Android has no x264 preset; the
+closest real knob is `MediaFormat.KEY_LATENCY`, which scrcpy can forward. My
+first attempt emitted `--video-codec-options=latency:9` and the **server refused
+it** (`CodecOption.parseOption: '=' expected`, "Server connection failed") --
+scrcpy's syntax is `key:type=value`. The launcher's own `--validate-profiles`
+passed that broken form, because it only proves the *client* parses the argument
+line; it is the server that validates codec options. After the fix
+(`latency:int=9`) two 6-second sessions on the TB-9707F streamed at 120 and
+144 fps with telemetry summaries, so both the option and the top of the fps step
+list are accepted by this device. The preset names keep the x264 vocabulary the
+user asked for, with the latency value shown next to each (`ultrafast
+(latency 9)`), and the tooltip states that the encoder may ignore it.
+
+Also from that validation run: with `--audio-codec=raw` scrcpy warns that
+`--audio-bit-rate` is ignored, so `BuildArguments` no longer emits it for raw.
+
+**§F: six profiles added to the built-in set**, all passing `--validate-profiles`
+against the real `scrcpy.exe` (10 profiles + the synthetic max-settings case,
+`ALL PROFILES VALID`): *Lowest latency*, *Competitive 120 (host scale)*,
+*Balanced HEVC 60*, *Recording only (clean)*, *Stream OBS (pipes)*,
+*Wi-Fi low bandwidth*.
+
+One deliberate deviation: the directive's profile 2 says `--max-size=720`. The
+launcher does not emit that flag. §4.1 forbids the project from touching what
+the device renders, gate section 13 asserts mechanically that no
+device-side resolution/crop/display flag comes out of the launcher, and weakening
+that check to accommodate one profile is the wrong way round. The profile keeps
+the intent -- 120 fps at 20 Mb/s, zero video buffer, ultrafast encoder -- and
+scales on the PC (`HostPreset=1080p`, `--game-window-filter=fast`). If you want
+a 720p *encode* you can still pass `--max-size=720` yourself on the command
+line; the README says so and says what it costs (a rescaled capture, so the
+touch mapping has to follow it). The *Stream OBS (pipes)* profile also carries a
+note that `--game-borderless-fullscreen` still reverts to a normal window at the
+first frame (task #20) rather than shipping as if it worked.
+
+**Open, honestly:** the short 6-second probes above are not comparable with the
+44 ms baseline in §5.1n -- one frame group of a mostly static screen with
+`--video-buffer=0` gives medians anywhere from 47 to 223 ms. The §C matrix
+measures with the screen lit, repeats each cell, and reports median/p90/p99 per
+combination; until those numbers are in, nothing here claims a latency
+improvement.
+
 ### 5.2 CLI
 
 * `scrcpy.exe --version` and `--help` work from the packaged directory with a

@@ -521,6 +521,67 @@ else
     fi
 fi
 
+head_ "15. the launcher has no untranslated text left (directive v2 §B)"
+# The static half of the i18n contract: every key the XAML asks for must exist
+# in the Loc table, no key may be declared twice, and no user-visible string may
+# be built in the code-behind. The runtime half -- an empty translation column
+# renders as "??? key" -- is asserted by the UI Automation audit above, which
+# switches language and reads the labels back.
+LOCSRC="$ROOT/launcher/Loc.cs"
+locfk="$ROOT/tools/fixtures"
+if [ ! -f "$LOCSRC" ] || [ ! -d "$locfk" ]; then
+    printf '  \033[33mSKIP\033[0m  %s\n' "no launcher sources here (packaged layout)"
+else
+    loc_keys="$(sed -n 's/^[[:space:]]*new\[\] { "\([^"]*\)".*/\1/p' "$LOCSRC" | sort -u)"
+    loc_rows="$(sed -n 's/^[[:space:]]*new\[\] { "\([^"]*\)".*/\1/p' "$LOCSRC" | wc -l)"
+    if [ "$(printf '%s\n' "$loc_keys" | wc -l)" -ne "$loc_rows" ]; then
+        bad "the Loc table declares duplicate keys ($(printf '%s\n' "$loc_keys" | wc -l) unique of $loc_rows rows)"
+    else
+        ok "the Loc table declares $loc_rows unique keys"
+    fi
+
+    # one helper, used for both the real XAML and the fixture, so the control
+    # proves *this* comparison works rather than a copy of it
+    missing_keys() {
+        grep -ohE '\{DynamicResource [A-Za-z0-9_]+' "$@" 2>/dev/null \
+            | awk '{print $2}' | sort -u \
+            | while read -r k; do
+                  printf '%s\n' "$loc_keys" | grep -qx -- "$k" || printf '%s\n' "$k"
+              done
+    }
+    ctrl="$(missing_keys "$locfk/localization_missing_key.txt" | wc -l)"
+    if [ "${ctrl:-0}" -ne 2 ]; then
+        bad "the key checker does not flag the 2 missing keys in the fixture (got ${ctrl:-0})"
+    else
+        ok "the key checker flags the fixture's 2 unknown keys (positive control)"
+    fi
+    live="$(missing_keys "$ROOT/launcher/MainWindow.xaml" "$ROOT/launcher/App.xaml")"
+    refs="$(grep -ohE '\{DynamicResource [A-Za-z0-9_]+' "$ROOT/launcher/MainWindow.xaml" \
+             "$ROOT/launcher/App.xaml" 2>/dev/null | wc -l)"
+    if [ -z "$live" ]; then
+        ok "all $refs DynamicResource references in the XAML exist in Loc"
+    else
+        bad "the XAML asks for keys Loc does not define:"
+        printf '%s\n' "$live" | sed 's/^/        /'
+    fi
+
+    LIT_RE='Log\(\$?"[A-Za-z]|MessageBox\.Show\(this, *"'
+    lit_ctrl="$(grep -cE "$LIT_RE" "$locfk/localization_literal_log.cs")"
+    if [ "${lit_ctrl:-0}" -lt 1 ]; then
+        bad "the hardcoded-string scan does not match the fixture (scan is broken)"
+    else
+        ok "the hardcoded-string scan matches the fixture (positive control)"
+    fi
+    lits="$(grep -nE "$LIT_RE" "$ROOT/launcher/MainWindow.xaml.cs" \
+             "$ROOT/launcher/MainWindow.Localized.cs" 2>/dev/null)"
+    if [ -z "$lits" ]; then
+        ok "no user-visible literal left in the code-behind"
+    else
+        bad "user-visible strings are hardcoded in the code-behind:"
+        printf '%s\n' "$lits" | sed 's/^/        /'
+    fi
+fi
+
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -240,6 +240,122 @@ public static class ProfileStore
 
     public static IEnumerable<AppConfig> BuiltinProfiles()
     {
+        // ---- the six profiles added by directive v2 §F ----
+        // Every one of them is checked against the real scrcpy.exe by
+        // --validate-profiles, and the ones that can be measured on the attached
+        // tablet are (BUILD_REPORT.md). None of them sets --max-size, --crop or
+        // a display id: the device keeps rendering at its own resolution.
+        yield return new AppConfig
+        {
+            Name = "Lowest latency",
+            Notes = "Native device resolution, no video buffer at all, "
+                  + "encoder asked for its lowest-latency setting. Watch the OSD "
+                  + "for the measured recv->present figure.",
+            VideoCodec = "h264",
+            BitrateMbps = 20,
+            MaxFps = 60,
+            VideoBufferMs = 0,
+            EncoderPreset = "ultrafast",
+            AudioOutputBufferMs = 40,
+            RenderDriver = "direct3d11",
+            Upscale = "linear",
+            LowLatency = true,
+            Osd = "full",
+        };
+        yield return new AppConfig
+        {
+            Name = "Competitive 120 (host scale)",
+            Notes = "120 fps at a modest bitrate; the picture is shrunk on the PC "
+                  + "by the window itself, never on the device, so touch alignment "
+                  + "stays exact. Use --game-bridge-scale if OBS needs a 720p feed.",
+            VideoCodec = "h264",
+            BitrateMbps = 20,
+            MaxFps = 120,
+            VideoBufferMs = 0,
+            EncoderPreset = "ultrafast",
+            AudioOutputBufferMs = 40,
+            RenderDriver = "direct3d11",
+            Upscale = "nearest",
+            WindowFilter = "fast",
+            HostPreset = "1080p",
+            LowLatency = true,
+            Osd = "full",
+        };
+        yield return new AppConfig
+        {
+            Name = "Balanced HEVC 60",
+            Notes = "Native capture, HEVC at 40 Mb/s: the middle ground for "
+                  + "mirroring and recording at the same time.",
+            VideoCodec = "hevc",
+            BitrateMbps = 40,
+            MaxFps = 60,
+            VideoBufferMs = 0,
+            EncoderPreset = "fast",
+            AudioCodec = "opus",
+            AudioBitrateKbps = 128,
+            RenderDriver = "direct3d11",
+            Upscale = "linear",
+            LowLatency = true,
+            Osd = "compact",
+        };
+        yield return new AppConfig
+        {
+            Name = "Recording only (clean)",
+            Notes = "No OSD, no overlay, no post-processing: the recording is the "
+                  + "picture. High bitrate into Matroska.",
+            VideoCodec = "h265",
+            BitrateMbps = 60,
+            MaxFps = 60,
+            Container = "mkv",
+            AudioCodec = "opus",
+            AudioBitrateKbps = 192,
+            Osd = "none",
+            TouchVisualizer = false,
+            FxSharp = false,
+            FxNight = false,
+            FxSat = false,
+            Upscale = "linear",
+        };
+        yield return new AppConfig
+        {
+            Name = "Stream OBS (pipes)",
+            Notes = "Frame + audio + decoded PCM on named pipes so OBS takes raw "
+                  + "frames instead of a window capture, and the PC speakers stay "
+                  + "free. NOTE: --game-borderless-fullscreen currently reverts to "
+                  + "a normal window on the first frame (known issue in README).",
+            VideoCodec = "h264",
+            BitrateMbps = 30,
+            MaxFps = 60,
+            VideoBufferMs = 0,
+            EncoderPreset = "ultrafast",
+            RenderDriver = "direct3d11",
+            Upscale = "linear",
+            LowLatency = true,
+            AlwaysOnTop = true,
+            Osd = "none",
+            FrameBridge = @"\\.\pipe\gaming-frame",
+            BridgeFilter = "lanczos",
+            AudioBridge = @"\\.\pipe\gaming-audio",
+            AudioPcm = @"\\.\pipe\gaming-pcm",
+            PcmMutePlayback = true,
+            AudioCodec = "raw",
+        };
+        yield return new AppConfig
+        {
+            Name = "Wi-Fi low bandwidth",
+            Notes = "For a wireless link: HEVC, low bitrate, 30 fps. Select the "
+                  + "ip:port device in the header first (README section 7 explains "
+                  + "how to put the device on Wi-Fi by hand).",
+            VideoCodec = "hevc",
+            BitrateMbps = 8,
+            MaxFps = 30,
+            VideoBufferMs = 50,
+            AudioCodec = "opus",
+            AudioBitrateKbps = 64,
+            RenderDriver = "direct3d11",
+            Upscale = "linear",
+            Osd = "compact",
+        };
         yield return new AppConfig
         {
             Name = "Competitive COD Mobile 120FPS",
