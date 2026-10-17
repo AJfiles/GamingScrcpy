@@ -15,11 +15,11 @@ something could not be measured, it says so.
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,172,808 bytes (rebuilt again for the v3 §2 header, §5.1aj; the size is unchanged to the byte), window verified on screen |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,181,000 bytes (rebuilt again for the v3 §1.2 audio honesty, §5.1ak: +8,192 bytes over the §5.1aj header build), window verified on screen |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (17 scripts + `fixtures\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh` and `bash tools/fx_pixel_test.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,300,327 bytes (≈120.5 MiB) at the v3 §2 repack; `Expand-Archive` into an empty directory yields **153 files under 7 directories**, counted from the extraction rather than from an archive entry list. The previous package carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (17 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), all exit 0 |
-| Regression suite | `tools\verify_all.sh` | **137 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_motorola_final.log`, §5.1ab); the earlier Lenovo TB-9707F run reached the same 137/0 (§5.1y, §5.4). The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,310,798 bytes (≈120.5 MiB) at the v3 §1.2 audio repack; `Expand-Archive` into an empty directory yields **138 files**, and the archive itself lists exactly 138 entries (`launcher\`, `scrcpy\`, `tools\` plus the three markdown files at the root). The earlier text claimed 153 files under 7 directories; that figure could not be reproduced against the current tree, so it is superseded by the two counts measured here, which agree. The previous package carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (17 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), all exit 0 |
+| Regression suite | `tools\verify_all.sh` | **137 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr3.clean.log`, §5.1ak — the same total the moto g(7) run reached before the audio section existed, `out\gate_motorola_final.log`, §5.1ab, and the Lenovo TB-9707F run, §5.1y/§5.4); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
 
@@ -2062,6 +2062,118 @@ in both languages.
 
 Reproduce: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
 out/v3_header_verify.ps1` (expects `HEADER-VERIFY OK`).
+
+### 5.1ak PR 3 — the launcher stops pretending about audio
+
+§5.1ac established the cause: the attached moto g(7) power reports **SDK 28**,
+and scrcpy's server refuses device audio below Android 11 (API 30). That is a
+device limit, not a bug in this fork — so the fix belongs entirely in the
+launcher, whose job is to never show a control that does nothing. Four changes,
+all verified against the real phone:
+
+* **Badge** (`TxtAudioBadge`, header row 3, visible only once a phone has been
+  read): *Audio del dispositivo: NO SOPORTADO (requiere Android 11+)* in amber,
+  or *Audio del dispositivo: compatible (Android 11+)* in green. The SDK that
+  gates it is already on the line above (`USB · moto g(7) power · Android 9 (SDK
+  28)`), so the claim and the evidence sit together.
+* **Six controls disabled, not hidden** (`ApplyAudioCapability`):
+  `CboAudioCodec`, `CboAudioBitrate`, `CboAudioOutBuffer`, `TxtAudioBridge`,
+  `TxtAudioPcm`, `ChkPcmMute`, each with the tooltip *Teléfono anterior a
+  Android 11: scrcpy no puede capturar su audio*. Disabled rather than collapsed
+  so the user can see what they are missing, and so gate §10 keeps finding them.
+* **The command line tells the truth** (`AppConfig.BuildArguments`): when the
+  picked device reports `0 < Sdk < 30` the preview sends `--no-audio` and **no**
+  `--audio-codec`, `--audio-bit-rate`, `--audio-source`, `--audio-buffer`,
+  `--audio-output-buffer`, `--game-audio-pcm` or `--game-audio-bridge`. The flag
+  comes from the attached device, never from a profile, so `NoDeviceAudio` is
+  `[JsonIgnore]`: loading *4K Ultra Quality Stream 60FPS* on an Android 9 phone
+  must not resurrect flags that phone ignores.
+* **Diagnóstico de audio** (`BtnAudioDiag`) prints, in the log panel: the serial,
+  SDK and release; the support verdict; the server's own last audio line (only
+  lines written *before* the diagnostic started, so it cannot quote itself);
+  what the PC sink is actually doing (no session / `--no-audio` / muted /
+  playing); and the phone's `STREAM_MUSIC` volume read from `dumpsys audio`. That
+  is the only adb call the button makes, it takes no arguments from the UI, and
+  gate §14 greps the launcher sources for the device-write blacklist, so the
+  read-only invariant is enforced by the gate rather than by an audit line here
+  (the audit log is what the *harnesses* append).
+
+Gate section 16 (`tools/audio_e2e_test.ps1`, v3 §1.3) is the end-to-end proof for
+the case this host cannot reach: a PCM pipe consumer + a video-less
+`--audio-source=output --audio-codec=opus --no-audio-playback --game-audio-pcm`
+session, asserting no refusal in the log, ≥ 8000 tap bytes, a real signal peak
+(> -90 dBFS, computed straight off the s16le stream because `ffmpeg` is on the
+bash PATH and not on PowerShell's) and no client audio error. It is **SKIP-safe**,
+and both paths were measured here:
+
+```
+SKIP no device with SDK >= 30 (device audio needs Android 11+)     exit 2 -> gate prints SKIP
+```
+
+and, forced onto the Android 9 phone with `-MinSdk 28` so the assertion itself is
+tested rather than trusted:
+
+```
+DEVICE <dev-id-2> sdk=28
+FAIL PCM tap got 0 bytes (expected a live stream)
+AUDIO-E2E FAIL issues=1
+```
+
+So the byte-count assertion is the load-bearing one: on a device that cannot
+capture audio the check fails instead of passing vacuously. README §7 item 14
+documents the manual matrix (`opus|raw`, `output|mic`, `--no-audio-playback`,
+`--game-audio-bridge`, and what the badge must say on a supported phone), which
+is what the SKIP message points at.
+
+**Not claimed:** the *supported* branch (green badge, enabled controls, audible
+PC audio) has never been executed on hardware here, because no Android 11+ device
+is attached. It is the same code path with the comparison inverted
+(`Sdk >= 30`), and gate §16 covers it the moment such a phone is connected — but
+until then it is reasoning, not measurement, and §6 of this report keeps it
+listed as unverified.
+
+Gate after the change. The first full run (`out/gate_v3_pr3.log`, 2026-10-17, phone
+attached) reached **133 passed, 2 failed, 1 SKIP**: §10 grew to **92 configurator
+controls** (the new `BtnAudioDiag` is found by `AutomationId`) and §15 to **244
+unique Loc keys** (19 audio strings). The two failures were the wall-clock-paced
+host audio checks in §8 (`pipe consumer received: 79600 398`, expected
+`80000 400`) and §8b (`pcm tap … 7680 B (expected ~153600 B)`,
+`telemetry fps=0.0`) — neither related to a launcher change, and both re-run
+standalone on an idle desktop in the same session:
+
+```
+attempt 1: pipe consumer received: 80000 400
+attempt 2: pipe consumer received: 80000 400
+bash tools/bridge_encode_test.sh 40 320x180
+RESULT frames=35 audio_chunks=34 vsize=320x180
+RESULT codecs=h264+aac durations=0.566667/0.566667 delta=0.000000 tol=0.025000
+RESULT pcm_tap=153532B rate=48000 ch=2 duration=0.799646 max_vol=-9.0dB
+OK
+```
+
+i.e. the documented "desktop still busy" family (§8 already retries once for
+exactly this reason), not a regression: the whole suite re-run with nothing else
+open (`out/gate_v3_pr3.clean.log`) is **137 passed, 0 failed**, §16 SKIP, with
+§11 again driving the real phone (`mirror pid=…`, `--serial=<dev-id-2> present`,
+`stop scrcpy exited cleanly`) and §13/§14 green. The two quoted evidence files
+are kept so the claims are re-readable, not just asserted: `out/v3_audio_probe.log`
+(`AUDIO-PROBE OK`: the badge string, the six `DISABLED` controls with tooltips,
+`PREVIEW sends --no-audio`, `PREVIEW sends no audio codec/bitrate/source/tap
+flags`, and the five diagnostic log lines) and
+`out/v3_audio_e2e_poscontrol.log` (the `-MinSdk 28` run, exit 1, whose only FAIL
+is the byte count while the three text assertions print `OK`).
+
+The deliverable is the repacked `dist/GamingScrcpy-win64-fork.zip` (126,310,798
+bytes, 138 entries) extracted to an empty directory: `recorder_integrity_test.sh`
+(`OK`, dual-120fps `frames=120`), `fx_pixel_test.sh` (`FXPIXEL OK`) and
+`render_driver_test.sh` (`OK`, vulkan and default backends `45/45`) all exit 0
+from the extraction, and the launcher inside it is the audio-honest build the
+probe measured above.
+
+Reproduce the UI part: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+out/v3_audio_probe.ps1` (expects `AUDIO-PROBE OK`), which walks the three tabs
+that hold the audio controls — WPF does not realize an unselected `TabItem`, so
+they are not in the UIA tree until their tab is selected.
 
 ## 6. What could NOT be validated here, and why
 

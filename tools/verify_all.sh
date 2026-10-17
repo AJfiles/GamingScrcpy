@@ -599,7 +599,32 @@ else
     fi
 fi
 
-head_ "16. host filter pixels (tools/fx_pixel_test.sh)"
+head_ "16. audio end-to-end on a device that can do it (directive v3 §1.3)"
+# Device audio needs Android 11 (API 30). The phone attached to this host is an
+# Android 9 one, so this section is SKIP-safe by design: it only runs when some
+# attached device reports SDK >= 30, and README §7 lists the manual steps for the
+# user to run it with a newer phone. A skip is honest; a green line from a device
+# that cannot produce audio would not be.
+if [ "$QUICK" -eq 1 ]; then
+    printf '  \033[33mSKIP\033[0m  %s\n' "audio end-to-end (needs a desktop session and a device)"
+else
+    ae="$(powershell.exe -NoProfile -ExecutionPolicy Bypass \
+            -File "$ROOT/tools/audio_e2e_test.ps1" 2>&1)"
+    aecode=$?
+    if [ "$aecode" -eq 2 ]; then
+        printf '  \033[33mSKIP\033[0m  %s\n' \
+            "$(printf '%s\n' "$ae" | grep '^SKIP' | head -1 | sed 's/^SKIP //')"
+        printf '        manual steps: README_GAMING.md section 7\n'
+    elif [ "$aecode" -eq 0 ]; then
+        while IFS= read -r line; do ok "${line#OK }"; done \
+            <<< "$(printf '%s\n' "$ae" | grep '^OK ')"
+    else
+        bad "audio end-to-end failed"
+        printf '%s\n' "$ae" | sed 's/^/        /'
+    fi
+fi
+
+head_ "19. host filter pixels (tools/fx_pixel_test.sh)"
 # A colour grade is only worth shipping if each control moves the picture, so
 # the assertions run as their own harness: a deterministic test pattern, one
 # filter enabled at a time, luma/chroma statistics before and after, and a PNG

@@ -93,7 +93,9 @@ try {
     )
 
     # header buttons live outside the TabControl, so they are always in the tree
-    foreach ($id in @('BtnRefresh','BtnWireless','BtnPair','BtnConnect','CboLanguage')) {
+    # (TxtAudioBadge is not listed: it only exists once a phone has been read)
+    foreach ($id in @('BtnRefresh','BtnWireless','BtnPair','BtnConnect','CboLanguage',
+                      'BtnAudioDiag')) {
         if (ById $window $id) { Write-Output "PASS $id (header)" }
         else { Write-Output "FAIL $id missing from the header"; $fail++ }
     }

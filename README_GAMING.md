@@ -462,6 +462,34 @@ What still needs your hands and eyes:
     hardware: start a mirror, press Stop, wait a minute, start again — if the
     second attempt comes up, it was the codec release, not the profile. Lowering
     fps or bitrate also avoids it, and the Android 14 tablet never showed it.
+14. **Device audio end-to-end on Android 11+** — gate section 16 runs
+    `powershell -NoProfile -ExecutionPolicy Bypass -File tools\audio_e2e_test.ps1`
+    (add `-Seconds 15` to listen longer, `-MinSdk 28` to force it onto an older
+    phone). It opens a named-pipe PCM consumer, starts a video-less
+    `--audio-source=output --audio-codec=opus --no-audio-playback
+    --game-audio-pcm=\\.\pipe\gaming-pcm-gate` session and fails unless the tap
+    carries real signal: `OK no audio refusal printed by the server`, `OK PCM tap
+    received N bytes`, `OK real signal on the PCM tap (peak=…, … dBFS)` (the level
+    is computed straight off the s16le stream, peak > -90 dBFS) and `OK no audio
+    error reported by the client`, ending in `AUDIO-E2E OK`. It is SKIP-safe on
+    purpose — with only a sub-Android-11 phone attached it prints `SKIP no device
+    with SDK >= 30 (device audio needs Android 11+)` and counts as neither pass
+    nor fail — so on hardware that *can* capture audio this is the check to run by
+    hand, together with the rest of the matrix the launcher offers:
+    * `--audio-codec=opus` (default) and `--audio-codec=raw` — `raw` must get no
+      bitrate flag, and both must be audible on the PC;
+    * `--audio-source=output` vs `--audio-source=mic` — `output` silences the
+      phone by design, `mic` carries the phone's microphone, so a clap must be
+      heard;
+    * `--no-audio-playback` with `--game-audio-pcm` still fed (PC silent, OBS
+      alive) and with `--game-audio-bridge` (§8) consumed by OBS;
+    * open the launcher on the same phone and press **Diagnóstico de audio** /
+      **Audio diagnostic**: the badge must read *Audio del dispositivo:
+      compatible (Android 11+)* / *Device audio: supported (Android 11+)* in
+      green, the codec / bitrate / output-buffer / PCM-tap / bridge / mute
+      controls must be enabled, and the log lines must agree with the server
+      about SDK, support and sink state.
+    Nothing here writes to the device: one `getprop` and scrcpy's own session.
 
 ### The read-only rule
 
@@ -586,7 +614,7 @@ FFmpeg-based consumers.
 * **Layout** — dark theme (`#0E0F13` on `#16181F`, one accent, monospaced
   numbers) and seven tabs: **Quick**, **Capture**, **Presentation**, **Filters**,
   **Recording / OBS**, **Control**, **Advanced**. Nothing was removed by the
-  redesign, only regrouped: 91 named controls are asserted present in the live
+  redesign, only regrouped: 92 named controls are asserted present in the live
   window by `tools/launcher_uiauto.ps1` (gate section 10).
 * **Device auto-detection** — `adb devices -l` plus `adb mdns services` for
   wireless-only devices; USB vs Wi-Fi classified; model read with `getprop`.
@@ -601,6 +629,20 @@ FFmpeg-based consumers.
   remembered. Gate section 15 fails if a key is missing in either language.
 * **Device panel** — model, battery level and temperature, read with read-only
   `getprop` / `dumpsys battery`. Nothing in the launcher writes a device setting.
+* **Audio honesty** — a phone below Android 11 (SDK 30) cannot hand scrcpy its
+  own audio, and that is a device limit, not a bug. So instead of leaving a
+  checkbox that silently does nothing, the header states it directly: *Audio del
+  dispositivo: NO SOPORTADO (requiere Android 11+)* / *Device audio: NOT
+  SUPPORTED (needs Android 11+)* in amber, or the green *compatible / supported*
+  line on a phone that can. When it cannot, the six audio controls (codec,
+  bitrate, output buffer, PCM tap, audio bridge, mute-PC) are disabled with the
+  reason in their tooltip, and the command preview sends `--no-audio` rather than
+  four flags that would be ignored. **Diagnóstico de audio** / **Audio
+  diagnostic** next to the badge prints SDK, support verdict, the server's own
+  audio line, what the PC sink is doing, and the phone's `STREAM_MUSIC` volume
+  read from `dumpsys audio` (read-only). Gate section 16 checks the working case
+  end to end and is SKIP-safe when only an old phone is attached (manual steps:
+  §7 item 14).
 * **Live performance** — the `LIVE PERFORMANCE` block on the **Quick** tab (not a
   separate tab, so it is visible the moment the launcher opens) shows latency /
   FPS / video and audio bitrate read from the fork's `--game-telemetry-log`

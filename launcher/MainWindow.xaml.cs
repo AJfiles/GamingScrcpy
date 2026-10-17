@@ -14,6 +14,9 @@ public partial class MainWindow : Window
     private Process? _scrcpy;
     private bool _suppress;
     private bool _ready;
+    // where the log stood when the audio diagnostic started, so it cannot quote
+    // its own lines back as "what the server said"
+    private int _diagLogMark = -1;
 
     public MainWindow()
     {
@@ -189,6 +192,13 @@ public partial class MainWindow : Window
         c.Serial = _devices.Count > 0 && DeviceCombo.SelectedIndex >= 0
             ? (_devices[DeviceCombo.SelectedIndex].Serial)
             : c.Serial;
+        // Below Android 11 the server refuses device audio, so the audio flags
+        // are dropped instead of sent and warned about: a codec picker that
+        // changes nothing is worse than a greyed-out one.
+        var picked = DeviceCombo.SelectedIndex >= 0 && DeviceCombo.SelectedIndex < _devices.Count
+            ? _devices[DeviceCombo.SelectedIndex]
+            : (_devices.Count > 0 ? _devices[0] : null);
+        c.NoDeviceAudio = picked is { Sdk: > 0 and < 30 };
 
         c.VideoCodec = CbValue(CboVideoCodec, "h264", "hevc", "av1");
         c.BitrateMbps = CbStep(CboBitrate, c.BitrateMbps);
@@ -431,6 +441,7 @@ public partial class MainWindow : Window
         }
         var d = _devices.Count > 0 ? _devices[0] : null;
         var online = d is { State: "device" };
+        var noAudio = d is { Sdk: > 0 and < 30 };
         var good = (System.Windows.Media.Brush)FindResource("Accent2");
         var warn = (System.Windows.Media.Brush)FindResource("Warn");
         DevDot.Fill = online ? good : warn;
@@ -442,6 +453,88 @@ public partial class MainWindow : Window
                 string.IsNullOrWhiteSpace(d.Model) ? d.Serial : d.Model,
                 string.IsNullOrWhiteSpace(d.Release) ? "?" : d.Release,
                 d.Sdk > 0 ? d.Sdk.ToString() : "?");
+        // The phone answers for the audio: an SDK of 0 means it has not been
+        // read yet, so the badge stays hidden rather than guessing.
+        TxtAudioBadge.Visibility = d is { Sdk: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        TxtAudioBadge.Text = noAudio ? Loc.T("AudioUnsupported") : Loc.T("AudioSupported");
+        TxtAudioBadge.Foreground = noAudio ? warn : good;
+        ApplyAudioCapability(noAudio);
+    }
+
+    // v3 §1.2: a control that changes nothing is worse than a greyed-out one, so
+    // the audio widgets follow what the phone can actually do and say why in
+    // their tooltip. IsEnabled leaves them in the UI tree, which is what gate
+    // section 10 asserts.
+    private void ApplyAudioCapability(bool unsupported)
+    {
+        var tip = unsupported ? Loc.T("TipAudioNeedsApi30") : Loc.T("TipAudioEnabled");
+        foreach (var c in new System.Windows.Controls.Control[]
+                 { CboAudioCodec, CboAudioBitrate, CboAudioOutBuffer,
+                   TxtAudioBridge, TxtAudioPcm, ChkPcmMute })
+        {
+            c.IsEnabled = !unsupported;
+            c.ToolTip = tip;
+        }
+    }
+
+    // v3 §1.2: everything here is a read. The device is someone's phone, so the
+    // diagnostic reads props and dumpsys and never writes, mutes or restarts.
+    private async void OnAudioDiagnostic(object sender, RoutedEventArgs e)
+    {
+        var d = _devices.Count > 0 ? _devices[0] : null;
+        _diagLogMark = TxtLog.Text.Length;
+        if (d is null)
+        {
+            Log(Loc.T("DiagAudioNoDevice"));
+            return;
+        }
+        Log(Loc.Format("DiagAudioSdk", d.Serial, d.Sdk, d.Release));
+        var supported = d.Sdk >= 30;
+        Log(supported ? Loc.T("DiagAudioYes") : Loc.T("DiagAudioNo"));
+
+        var server = LastAudioLine();
+        Log(Loc.Format("DiagAudioServer", server ?? Loc.T("DiagAudioNoLine")));
+
+        var running = _scrcpy is { HasExited: false };
+        var sink = !running
+            ? Loc.T("DiagAudioIdle")
+            : Collect().NoDeviceAudio ? Loc.T("DiagAudioNoAudioFlag")
+            : Collect().PcmMutePlayback ? Loc.T("DiagAudioMuted")
+            : Loc.T("DiagAudioPlaying");
+        Log(Loc.Format("DiagAudioSink", sink));
+
+        var dump = await Adb.RunAsync($"-s {d.Serial} shell dumpsys audio", 8000);
+        // Android 9 prints the music stream as a "- STREAM_MUSIC:" block whose
+        // Current:/Devices: lines carry the per-route indexes. Newer releases
+        // reformat it, and then the honest answer is "not readable" rather than
+        // a number invented from the wrong line.
+        var lines = dump.output.Split('\n').Select(l => l.Trim()).ToList();
+        var music = lines.FindIndex(l => l.StartsWith("- STREAM_MUSIC"));
+        var volume = music < 0
+            ? ""
+            : string.Join(" ", lines.Skip(music + 1).Take(5)
+                .Where(l => l.StartsWith("Current:") || l.StartsWith("Devices:")));
+        Log(Loc.Format("DiagAudioVolume",
+            string.IsNullOrWhiteSpace(volume) ? Loc.T("DiagAudioNoVolume") : volume));
+    }
+
+    // Only what the server said before this diagnostic started: the diagnostic
+    // writes the word "audio" itself, and matching that would quote itself.
+    private string? LastAudioLine()
+    {
+        var text = TxtLog.Text;
+        var upto = _diagLogMark >= 0 && _diagLogMark <= text.Length ? _diagLogMark : text.Length;
+        string? found = null;
+        foreach (var raw in text.AsSpan(0, upto).ToString().Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Contains("Audio", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("audio", StringComparison.Ordinal))
+            {
+                found = line;
+            }
+        }
+        return found;
     }
 
     private async void OnRefreshDevices(object sender, RoutedEventArgs e) =>

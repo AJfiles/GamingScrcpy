@@ -24,6 +24,10 @@ public sealed class AppConfig
     [JsonPropertyName("audioCodec")] public string AudioCodec { get; set; } = "opus";
     [JsonPropertyName("audioBitrateKbps")] public int AudioBitrateKbps { get; set; } = 128;
     [JsonPropertyName("audioSource")] public string AudioSource { get; set; } = "output";
+    // Comes from the attached device, never from a profile: below Android 11 the
+    // server refuses device audio, so the launcher must not pretend the audio
+    // flags it sends do anything.
+    [JsonIgnore] public bool NoDeviceAudio { get; set; }
 
     /// <summary>
     /// Encoder speed/quality bias, translated into the MediaFormat latency key.
@@ -171,6 +175,7 @@ public sealed class AppConfig
     /// process is started without any shell quoting guesswork.
     public List<string> BuildArguments(string? overrideSerial = null)
     {
+        var noDeviceAudio = NoDeviceAudio;
         var a = new List<string>();
 
         var serial = string.IsNullOrWhiteSpace(overrideSerial) ? Serial : overrideSerial;
@@ -211,23 +216,33 @@ public sealed class AppConfig
         {
             a.Add($"--hwdec={hwdec}");
         }
-        a.Add($"--audio-codec={AudioCodec}");
-        // raw PCM has no bitrate: scrcpy warns that the value is ignored
-        if (AudioCodec != "raw")
+        if (noDeviceAudio)
         {
-            a.Add($"--audio-bit-rate={AudioBitrateKbps}K");
+            a.Add("--no-audio");
         }
-        if (!string.IsNullOrWhiteSpace(AudioSource) && AudioSource != "auto")
+        else
         {
-            a.Add($"--audio-source={AudioSource}");
+            a.Add($"--audio-codec={AudioCodec}");
+            // raw PCM has no bitrate: scrcpy warns that the value is ignored
+            if (AudioCodec != "raw")
+            {
+                a.Add($"--audio-bit-rate={AudioBitrateKbps}K");
+            }
+            if (!string.IsNullOrWhiteSpace(AudioSource) && AudioSource != "auto")
+            {
+                a.Add($"--audio-source={AudioSource}");
+            }
         }
         // No --max-size / --crop / --new-display anywhere on purpose: the device
         // keeps its native framebuffer, so game UI and touch mapping stay exact.
 
         // ---- buffers ----
         a.Add($"--video-buffer={VideoBufferMs}");
-        a.Add($"--audio-buffer={AudioBufferMs}");
-        a.Add($"--audio-output-buffer={AudioOutputBufferMs}");
+        if (!noDeviceAudio)
+        {
+            a.Add($"--audio-buffer={AudioBufferMs}");
+            a.Add($"--audio-output-buffer={AudioOutputBufferMs}");
+        }
 
         // ---- host presentation ----
         if (RenderDriver != "default")
@@ -356,11 +371,14 @@ public sealed class AppConfig
                 a.Add($"--game-bridge-filter={filter}");
             }
         }
-        if (!string.IsNullOrWhiteSpace(AudioBridge))
+        // The two audio taps copy decoded device audio. With no device audio
+        // there is nothing to copy, so they stay off rather than opening pipes
+        // that never receive a packet.
+        if (!noDeviceAudio && !string.IsNullOrWhiteSpace(AudioBridge))
         {
             a.Add($"--game-audio-bridge={AudioBridge}");
         }
-        if (!string.IsNullOrWhiteSpace(AudioPcm))
+        if (!noDeviceAudio && !string.IsNullOrWhiteSpace(AudioPcm))
         {
             a.Add($"--game-audio-pcm={AudioPcm}");
             if (PcmMutePlayback)
