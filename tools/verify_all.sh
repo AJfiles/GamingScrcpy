@@ -467,6 +467,60 @@ else
     fi
 fi
 
+head_ "14. no script, launcher or test of this project writes to the device (directive §4.2)"
+# The tablet is somebody's real phone, so streaming and input injection aside,
+# nothing shipped here may install, push, or change a device setting. Patterns
+# bracket their first letter so that this gate file never matches its own list.
+# Upstream scrcpy legitimately implements the IDL installer and the TCP
+# reconnect, so app/ is scanned only for lines this fork *added* -- scanning it
+# wholesale would fail on code we did not write.
+WRITE_PATTERNS='[aA]db install|[aA]db uninstall|[aA]db push|[aA]db root|[aA]db remount|[aA]db reboot|[aA]db tcpip|[aA]db usb|[sS]ettings put|[sS]ettings delete|[sS]ettings secure|[wW]m size|[wW]m density|[wW]m overscan|[pP]m install|[pP]m uninstall|[pP]m clear|\b[aA]m force-stop|\b[aA]m start|\b[aA]m kill|[fF]astboot '
+our_dirs=()
+for d in scripts tools launcher; do
+    [ -d "$ROOT/$d" ] && our_dirs+=("$ROOT/$d")
+done
+fixture="$ROOT/tools/fixtures/device_write_adb_install.sh"
+if [ "${#our_dirs[@]}" -eq 0 ]; then
+    printf '  \033[33mSKIP\033[0m  %s\n' "no project source dirs here (packaged layout)"
+else
+    # positive control first: a grep that matches nothing would pass everything
+    fixture_hits="$(grep -cE "$WRITE_PATTERNS" "$fixture" 2>/dev/null)"
+    if [ "${fixture_hits:-0}" -lt 3 ]; then
+        bad "the blacklist fixture is not detected (hits=${fixture_hits:-0}/3, grep is broken)"
+    else
+        ok "blacklist grep detects the 3 forbidden commands in the fixture (positive control)"
+    fi
+    control="$(grep -rlE 'shell getprop' "$ROOT/launcher" --include='*.cs' 2>/dev/null | wc -l)"
+    if [ "${control:-0}" -eq 0 ]; then
+        bad "the launcher scan saw no read-only call either, so the scan path is wrong"
+    else
+        ok "the scan really covers the launcher sources (control: getprop found)"
+    fi
+    hits="$(grep -rnE --binary-files=without-match \
+              --exclude-dir=fixtures --exclude-dir=platform-tools --exclude-dir=stock \
+              --exclude-dir=bin --exclude-dir=obj --exclude-dir=out \
+              "$WRITE_PATTERNS" "${our_dirs[@]}" 2>/dev/null)"
+    if [ -z "$hits" ]; then
+        ok "our scripts/tools/launcher contain no device write command (${#our_dirs[@]} dirs scanned)"
+    else
+        bad "device write commands found in project code ($(printf '%s\n' "$hits" | wc -l) hits)"
+        printf '%s\n' "$hits" | head -10 | sed 's/^/        /'
+    fi
+    if [ -d "$SRC/.git" ]; then
+        base="${base:-$(git -C "$SRC" describe --tags --abbrev=0 2>/dev/null)}"
+        added="$(git -C "$SRC" diff "$base" -- app 2>/dev/null | grep '^+' | grep -v '^+++')"
+        fork_hits="$(printf '%s\n' "$added" | grep -cE "$WRITE_PATTERNS")"
+        if [ -z "$base" ]; then
+            printf '  \033[33mSKIP\033[0m  %s\n' "no upstream baseline to diff app/ against"
+        elif [ "${fork_hits:-0}" -eq 0 ]; then
+            ok "the fork adds no device write command to app/ ($(printf '%s\n' "$added" | wc -l) added lines checked)"
+        else
+            bad "the fork added $fork_hits device write line(s) in app/"
+            printf '%s\n' "$added" | grep -E "$WRITE_PATTERNS" | head -10 | sed 's/^/        /'
+        fi
+    fi
+fi
+
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

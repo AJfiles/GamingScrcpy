@@ -1082,6 +1082,85 @@ of which behave as documented. Cursor auto-hide is not externally observable (SD
 hides the cursor without changing a window style), so it stays a user-verified
 item rather than being claimed from a log line.
 
+### 5.1s Device-integrity audit (directive v2 step 0) and the gate check that replaced it
+
+Step 0 asked for the blacklist to be grepped over the repository **before** the
+new check is added, and for any pre-existing write command to be reported rather
+than quietly fixed. The scan ran over `scripts/` (does not exist in this repo),
+`tools/`, `launcher/` and the fork's own diff against `v5.0.1`.
+
+**What was already there.** `tools/` and the fork's C diff were clean — the only
+`tools/` hits were inside the vendored `platform-tools/adb.exe`, `fastboot.exe`
+and the stock `scrcpy.exe`, i.e. the ADB binary itself, not project code. The
+launcher was not: three methods in `launcher/Services.cs` wrote to the device.
+
+| found at | command it built | verdict |
+|---|---|---|
+| `Services.cs:147` (`TcpIpAsync`) | `-s <serial> tcpip 5555` | real violation, on the blacklist |
+| `Services.cs:153` (`SetDeviceTouchesAsync`) | `-s <serial> shell settings put system show_touches …` | real violation |
+| `Services.cs:159` (`MuteDeviceSpeakersAsync`) | `-s <serial> shell cmd audio --mute-internal …` | not on the literal list, but it is a system-setting write, so the same rule covers it |
+| `AppConfig.cs:157-159` | `--select-tcpip` | **not** a violation: scrcpy's own `-e`, host-side device *selection* (confirmed in this build's `--help`) |
+
+Only `TcpIpAsync` had a call site (`OnEnableTcpIp`, wired to the header button,
+which also logged the literal string); the other two were dead code.
+
+**What replaced them.** The two dead methods are deleted. The button keeps its
+place in the header — §A of the directive says regroup, don't delete — but is now
+`BtnWireless` ("Wireless ADB guide", localized in both languages) and opens a
+dialog that points at README §7 instead of running anything: the feature is
+documented as a manual step, which is exactly what §4.2 prescribes. `Pair` and
+`Connect` stay, because they only attach the host to a device that is *already*
+listening on TCP. The two lost device settings have scrcpy-native equivalents,
+checked against this binary's help rather than assumed: `-t, --show-touches`
+("enable 'show touches' on start, **restore the initial value on exit**", help
+line 600) and `--audio-source=output` ("forwards the whole audio output, and
+disables playback on the device", help line 147). This build has **no**
+`--mute-device`, which is why the first draft of the README text about muting was
+wrong and had to be corrected before it shipped.
+
+**Section 14 of the gate** now enforces this instead of trusting the intent. It
+greps the blacklist over `scripts/`, `tools/`, `launcher/` (binaries,
+`platform-tools/`, `stock/`, `bin/`, `obj/` and the fixture directory excluded)
+and fails on any hit. For `app/` it greps **only the lines this fork adds** on
+top of the upstream tag: upstream scrcpy legitimately implements the IDL
+installer and the TCP reconnect, and scanning the whole tree would fail on code
+this project did not write (7 such hits exist in `app/src/adb/adb.c`, `adb.h`,
+`cli.c` and `scrcpy.1`). Three controls keep it honest:
+
+* `tools/fixtures/device_write_adb_install.sh` holds three forbidden commands and
+  the gate **fails if the grep does not detect all three**, so a broken or
+  over-excluded pattern cannot pass in false;
+* a read-only control (`shell getprop`) must be found in the launcher, proving
+  the scan is really looking at those files;
+* the pattern list brackets each first letter (`[aA]db install`), so the gate
+  file never matches its own list (verified: 0 self-hits in `verify_all.sh`).
+
+The check caught two of its own making: the comment added in `Services.cs` and a
+header line in `tools/adb_audit.sh` both spelled out a forbidden command in
+prose, and section 14 failed them. The comments were rephrased rather than the
+grep weakened. Standalone run of the logic: fixture 3/3 detected, getprop
+control found, project scan 0 hits, fork diff 0 hits across the added lines.
+
+**Audit trail.** `tools/adb_audit.sh` appends one timestamped line per device
+command to `out/dev/adb_audit.log`; `tools/device_latency_probe.sh` now calls it
+for its `adb devices` probe and for every scrcpy session it starts. Nothing in
+this round wrote to the tablet: the commands run were `adb devices` and scrcpy
+mirroring/recording sessions, all logged.
+
+**A harness defect the same run exposed.** The gate finished 123 passed / 1
+failed, and the failure was not in the launcher: `tools/launcher_uiauto.ps1`
+located each tab by matching its *header text* against an English keyword
+(`-like '*Quick*'`). Header text is localized now, so with the language the
+launcher last remembered set to Spanish every tab missed except "Control" — a
+word that happens to be identical in both languages. The plan is keyed by tab
+index instead, asserts that exactly 7 tabs exist, and checks that each header is
+actually localized (a header still showing its `Tab*` resource key fails). It
+also asserts the five header controls by their real `x:Name`, which caught a
+second mistake: the rescan button is `BtnRefresh`, and the harness had been
+asking for the *resource key* `BtnRescan`. After the fix the audit is green with
+71 assertions. The lesson is the same one §5.1k recorded about screenshots: a
+check that quietly depends on a display state is not a check.
+
 ### 5.2 CLI
 
 * `scrcpy.exe --version` and `--help` work from the packaged directory with a

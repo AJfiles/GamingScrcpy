@@ -38,7 +38,23 @@ namespace GamingScrcpyLauncher
             new[] { "BadgeNoDevice", "sin dispositivo", "no device" },
             new[] { "BadgeDevices", "{0} dispositivo(s)", "{0} device(s)" },
             new[] { "BtnRescan", "Reescanear ADB", "Rescan ADB" },
-            new[] { "BtnTcpIp", "Activar ADB sobre TCP/IP", "Enable ADB over TCP/IP" },
+            new[] { "BtnWireless", "Gu\u00eda ADB inal\u00e1mbrico", "Wireless ADB guide" },
+            new[] { "WirelessGuideTitle", "ADB inal\u00e1mbrico: pasos manuales",
+                    "Wireless ADB: manual steps" },
+            new[] { "WirelessGuideBody",
+                    "Este launcher no pone el dispositivo en modo TCP: eso escribe "
+                    + "en el propio tablet, y el proyecto lo mantiene de solo lectura.\n\n"
+                    + "H\u00e1zalo t\u00fa una vez (README_GAMING.md, secci\u00f3n 7) y luego usa "
+                    + "\u00abEmparejar\u00bb o \u00abConectar ip:puerto\u00bb, que no tocan nada del "
+                    + "dispositivo.",
+                    "This launcher does not switch the device to TCP mode: that writes "
+                    + "to the tablet itself, and this project keeps it read-only.\n\n"
+                    + "Do it once by hand (README_GAMING.md, section 7), then use "
+                    + "\u00abPair wireless\u00bb or \u00abConnect ip:port\u00bb, which never write to "
+                    + "the device." },
+            new[] { "WirelessGuideLogged",
+                    "gu\u00eda de ADB inal\u00e1mbrico: README_GAMING.md \u00a77",
+                    "wireless ADB guide: README_GAMING.md \u00a77" },
             new[] { "BtnPair", "Emparejar inal\u00e1mbrico", "Pair wireless" },
             new[] { "BtnConnect", "Conectar ip:puerto", "Connect ip:port" },
 

@@ -53,39 +53,65 @@ try {
         Write-Output "PASS window title localized ('$title')"
     }
 
-    $plan = [ordered]@{
-        'Quick'  = @('BtnMirror','BtnMirrorRecord','BtnRecordOnly','BtnStop','TxtDeviceModel',
-                     'TxtDeviceBattery','TxtDeviceTemp','TxtPerfLatency','TxtPerfFps',
-                     'TxtPerfVideo','TxtPerfAudio')
-        'Capture' = @('CboVideoCodec','SldBitrate','LblBitrate','SldMaxFps','LblMaxFps',
-                      'CboAudioCodec','SldAudioBitrate','LblAudioBitrate','CboHwdec','LblCodecNote')
-        'Presentation' = @('CboDriver','CboUpscale','CboWindowFilter','CboHostPreset',
-                           'CboRenderFit','SldVideoBuffer','LblVideoBuffer','SldAudioOutBuffer',
-                           'LblAudioOutBuffer','ChkLowLatency','ChkBorderless','ChkAlwaysOnTop',
-                           'ChkMipmaps','ChkTouchViz','CboOsd','SldCursorHide','LblCursorHide')
-        'Filters' = @('ChkFxSharp','ChkFxNight','ChkFxSat','SldSharp','LblSharp','SldNight',
-                      'LblNight','SldSat','LblSat')
-        'Recording' = @('CboContainer','TxtRecordPath','TxtFrameBridge','TxtBridgeScale',
-                        'CboBridgeFilter','TxtAudioBridge','TxtAudioPcm','ChkPcmMute','TxtExtraArgs')
-        'Control' = @('CboKeyboard','CboMouse','CboGamepad','TxtMouseBindings','KeymapList',
-                      'TxtKeymapHint')
-        'Advanced' = @('ProfileList','TxtProfileName')
+    # Index -> expected controls, in XAML order. Keyed by index on purpose: the
+    # headers are localized, so looking a tab up by the English word only works
+    # in the language the test was written in -- it failed for every tab but
+    # 'Control' once the launcher remembered Spanish.
+    $plan = @(
+        @{ key='TabQuick';        ids=@('BtnMirror','BtnMirrorRecord','BtnRecordOnly',
+                                        'BtnStop','TxtDeviceModel','TxtDeviceBattery',
+                                        'TxtDeviceTemp','TxtPerfLatency','TxtPerfFps',
+                                        'TxtPerfVideo','TxtPerfAudio') }
+        @{ key='TabCapture';      ids=@('CboVideoCodec','SldBitrate','LblBitrate',
+                                        'SldMaxFps','LblMaxFps','CboAudioCodec',
+                                        'SldAudioBitrate','LblAudioBitrate','CboHwdec',
+                                        'LblCodecNote') }
+        @{ key='TabPresentation'; ids=@('CboDriver','CboUpscale','CboWindowFilter',
+                                        'CboHostPreset','CboRenderFit','SldVideoBuffer',
+                                        'LblVideoBuffer','SldAudioOutBuffer',
+                                        'LblAudioOutBuffer','ChkLowLatency',
+                                        'ChkBorderless','ChkAlwaysOnTop','ChkMipmaps',
+                                        'ChkTouchViz','CboOsd','SldCursorHide',
+                                        'LblCursorHide') }
+        @{ key='TabFilters';      ids=@('ChkFxSharp','ChkFxNight','ChkFxSat','SldSharp',
+                                        'LblSharp','SldNight','LblNight','SldSat',
+                                        'LblSat') }
+        @{ key='TabRecorder';     ids=@('CboContainer','TxtRecordPath','TxtFrameBridge',
+                                        'TxtBridgeScale','CboBridgeFilter',
+                                        'TxtAudioBridge','TxtAudioPcm','ChkPcmMute',
+                                        'TxtExtraArgs') }
+        @{ key='TabControl';      ids=@('CboKeyboard','CboMouse','CboGamepad',
+                                        'TxtMouseBindings','KeymapList','TxtKeymapHint') }
+        @{ key='TabAdvanced';     ids=@('ProfileList','TxtProfileName') }
+    )
+
+    # header buttons live outside the TabControl, so they are always in the tree
+    foreach ($id in @('BtnRefresh','BtnWireless','BtnPair','BtnConnect','CboLanguage')) {
+        if (ById $window $id) { Write-Output "PASS $id (header)" }
+        else { Write-Output "FAIL $id missing from the header"; $fail++ }
     }
 
     $tabs = ByType $window $CT::TabItem
-    foreach ($entry in $plan.GetEnumerator()) {
-        $tab = $null
-        for ($i = 0; $i -lt $tabs.Count; $i++) {
-            if ($tabs[$i].Current.Name -like ('*' + $entry.Key + '*')) { $tab = $tabs[$i]; break }
+    if ($tabs.Count -ne $plan.Count) {
+        Write-Output "FAIL expected $($plan.Count) tabs, found $($tabs.Count)"; $fail++
+    }
+    $stop = [Math]::Min($tabs.Count, $plan.Count)
+    for ($i = 0; $i -lt $stop; $i++) {
+        $entry = $plan[$i]
+        $name = $tabs[$i].Current.Name
+        # a header still showing its resource key means DynamicResource never hit
+        if (-not $name -or $name -eq $entry.key -or $name -match '\?\?\?') {
+            Write-Output "FAIL tab $i ('$($entry.key)') header not localized (name='$name')"
+            $fail++
         }
-        if (-not $tab) { Write-Output "FAIL tab '$($entry.Key)' missing"; $fail++; continue }
         try {
-            ($tab.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()
-        } catch { Write-Output "FAIL tab '$($entry.Key)' unselectable"; $fail++; continue }
+            ($tabs[$i].GetCurrentPattern(
+                [System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()
+        } catch { Write-Output "FAIL tab '$($entry.key)' unselectable"; $fail++; continue }
         Start-Sleep -Milliseconds 400
-        foreach ($id in $entry.Value) {
-            if (ById $window $id) { Write-Output "PASS $id ($($entry.Key))" }
-            else { Write-Output "FAIL $id missing under $($entry.Key)"; $fail++ }
+        foreach ($id in $entry.ids) {
+            if (ById $window $id) { Write-Output "PASS $id ($($entry.key))" }
+            else { Write-Output "FAIL $id missing under $($entry.key)"; $fail++ }
         }
     }
 

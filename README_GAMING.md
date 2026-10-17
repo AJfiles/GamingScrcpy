@@ -387,6 +387,49 @@ What still needs your hands and eyes:
    line, and killing the consumer must not stutter the video (the tap is
    drop-oldest, so it can only lose audio chunks, never block the decoder).
 
+9. **Wireless ADB, by hand** — the launcher will not do this for you. Switching
+   the device to TCP mode rewrites how `adbd` listens, i.e. it is a *write* on a
+   device that this project treats as read-only (see the note below and
+   `BUILD_REPORT.md` §5.2). Run it yourself, once, while USB is attached:
+   ```
+   adb tcpip 5555
+   adb shell ip addr show wlan0     # or read it in Settings > Wi-Fi > the network
+   adb connect 192.168.1.20:5555    # unplug the cable first
+   ```
+   After that the launcher's **Pair wireless** / **Connect ip:port** buttons work
+   normally: they only touch the host side of the transport. Android 11+ can skip
+   the cable entirely with *Developer options > Wireless debugging > Pair device*,
+   and the pairing command it shows is what **Pair wireless** expects.
+10. **On-device touch dots** — two different features, easy to confuse:
+    * the launcher's **Touch visualizer** maps to this fork's
+      `--game-touch-visualizer` and draws rings **on the PC picture only**;
+    * Android's own dots are a device setting. Ask scrcpy to set them with its
+      built-in `-t` / `--show-touches` — the server enables it and *restores the
+      initial value on exit*, which is scrcpy's own design and stays inside the
+      read-only rule. Note it "only shows physical touches (not clicks from
+      scrcpy)". The launcher will not run a settings command for you.
+11. **Silencing the phone while keeping the sound on the PC** — this build has no
+    `--mute-device`; its help offers `--audio-source=output`, which "forwards the
+    whole audio output, and disables playback on the device". That is already the
+    launcher's default (`audioSource` in the profile JSON, `output`; there is no
+    dropdown for it yet). For the reverse (PC silent, OBS still fed) use
+    `--no-audio-playback`, which is what the `ChkPcmMute` checkbox appends
+    together with the PCM tap.
+
+### The read-only rule
+
+The test device is somebody's real tablet, so no script, launcher button, test or
+tool in this project writes to it: nothing installs or pushes files, nothing
+changes a system setting, resolution, DPI or the ADB transport. Only
+`adb devices`, `getprop`, read-only `dumpsys`, and whatever scrcpy itself does by
+design (video/audio streaming, input injection, its own screen-on/off) are used.
+Gate section 14 greps `tools/`, `launcher/`, `scripts/` and this fork's own
+diff against upstream for that blacklist and fails on any hit, with a fixture
+(`tools/fixtures/device_write_adb_install.sh`) that it must *detect* so a broken
+grep cannot pass in false. Every command a harness runs is appended to
+`out/dev/adb_audit.log`. If a check would need a device write, it is documented
+above as a manual step instead of being automated.
+
 ## 8. OBS / FFmpeg frame and audio bridge
 
 The frame bridge writes **raw RGBA** frames plus a `<path>.meta.txt` sidecar

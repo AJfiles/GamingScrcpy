@@ -15,6 +15,9 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 client="$root/dist/GamingScrcpy/scrcpy/scrcpy.exe"
 adbwin='C:\Users\Administrator\Desktop\GamingCapture\dist\GamingScrcpy\scrcpy\adb.exe'
+# every device command lands in out/dev/adb_audit.log for the owner to review
+audit() { bash "$here/adb_audit.sh" "$*"; }
+audit "adb devices"
 serial=$(cd "$root/dist/GamingScrcpy/scrcpy" && ./adb.exe devices 2>/dev/null \
         | awk 'NR>1 && $2=="device" {print $1; exit}')
 
@@ -33,6 +36,7 @@ fail=0
 run_case() {
     local name=$1; shift
     local log=$tmp/$name.log
+    audit "scrcpy --serial=$serial --game-telemetry-log --video-bit-rate=48M --max-fps=60 --time-limit=18 $*"
     # 2 s to connect, then the wake shortcut, then 12 s of measurement, so the
     # scene is actually lit and the encoder has something to do.
     ADB="$adbwin" "$client" --serial="$serial" --game-telemetry-log \

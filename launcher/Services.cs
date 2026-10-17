@@ -137,27 +137,15 @@ public static class Adb
         return code == 0 ? output.Trim() : "";
     }
 
+    // connect/pair only talk to a device that is already listening on TCP; they
+    // change host-side transport, never the device. Switching the device into
+    // TCP mode would be a transport write, and §4.2 forbids this launcher from
+    // writing to the device -- see README_GAMING.md §7 for the manual procedure.
     public static Task<(int code, string output)> ConnectAsync(string hostPort) =>
         RunAsync($"connect {hostPort}", 15000);
 
     public static Task<(int code, string output)> PairAsync(string hostPort, string code6) =>
         RunAsync($"pair {hostPort} {code6}", 30000);
-
-    public static Task<(int code, string output)> TcpIpAsync(string serial, int port) =>
-        RunAsync($"-s {serial} tcpip {port}", 15000);
-
-    // Enable "show touches" in the device developer options. This is a device
-    // setting, independent of the fork's host-side visualizer.
-    public static Task<(int code, string output)> SetDeviceTouchesAsync(string serial,
-                                                                        bool on) =>
-        RunAsync($"-s {serial} shell settings put system show_touches {(on ? 1 : 0)}");
-
-    // Mute the device speakers while audio keeps flowing to the PC over the
-    // ADB tunnel (Android's audio routing is independent of scrcpy's stream).
-    public static Task<(int code, string output)> MuteDeviceSpeakersAsync(string serial,
-                                                                          bool mute) =>
-        RunAsync($"-s {serial} shell cmd audio --mute-internal " +
-                 (mute ? "true" : "false"));
 }
 
 public static class ProfileStore

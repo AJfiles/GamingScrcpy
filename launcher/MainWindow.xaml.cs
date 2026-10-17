@@ -321,20 +321,14 @@ public partial class MainWindow : Window
     private async void OnRefreshDevices(object sender, RoutedEventArgs e) =>
         await RefreshDevicesAsync();
 
-    private async void OnEnableTcpIp(object sender, RoutedEventArgs e)
+    private void OnWirelessGuide(object sender, RoutedEventArgs e)
     {
-        var serial = SelectedSerial();
-        if (serial == null)
-        {
-            return;
-        }
-        var (code, output) = await Adb.TcpIpAsync(serial, 5555);
-        Log($"adb tcpip 5555 -> {output}");
-        if (code == 0)
-        {
-            Log("now unplug USB and use 'Connect ip:port' with the device IP");
-        }
-        await RefreshDevicesAsync();
+        // Switching the device to TCP mode is a write on the device itself, so
+        // this launcher only explains how to do it by hand and then uses the
+        // read-only half (pair/connect against a device already in TCP mode).
+        MessageBox.Show(this, Loc.T("WirelessGuideBody"), Loc.T("WirelessGuideTitle"),
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+        Log(Loc.T("WirelessGuideLogged"));
     }
 
     private async void OnPairWireless(object sender, RoutedEventArgs e)
