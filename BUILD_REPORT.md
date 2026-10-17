@@ -1844,6 +1844,141 @@ None of these were visible in the UI — the command preview simply omitted the
 argument — which is the point of asserting the generated arguments against the
 real binary instead of reading them.
 
+### 5.1ac v3 pre-flight: the audio question, the header overlap, the shortcuts zone
+
+Directive v3 §9 asks for evidence before code. This section is that evidence plus
+the seven-step plan. Everything here was measured on 2026-10-17 on this host with
+the **moto g(7) power** (serial `<dev-id-2>`) attached; the commands are in
+`out/dev/adb_audit.log`, the probe is `out/v3_preflight_probe.ps1` (scratch, not
+shipped) and the pictures are `out/shots/v3_*.png`. v3's evidence continues the
+§5.1a-§5.1ab run rather than taking the §5.2 number the directive suggested,
+because §5.2 has been the CLI chapter since v1.
+
+### 5.1ad "NO suena en el PC el audio del teléfono" — measured, and it is the phone
+
+| Device | SDK (`getprop ro.build.version.sdk`) | audio flags run | session | exact server line |
+|---|---|---|---|---|
+| moto g(7) power, Android 9 | **28** | `--audio-source=output --audio-codec=opus` | video only | `[server] WARN: Audio disabled: it is not supported before Android 11` then `WARN: Demuxer 'audio': stream explicitly disabled by the device` / `ERROR: Demuxer error` |
+| moto g(7) power, Android 9 | 28 | `--audio-source=mic` | video only | same two lines — the mic source is refused by the same SDK gate, not by a different one |
+| Lenovo TB-9707F, Android 14 | 34 | `--audio-source=output --audio-codec=opus` (recorded 2026-10-17, §5.1y) | **audio captured** | no `Audio disabled` line; playback arrived as opus 48 kHz stereo and muxed into the recording (§5.1x, line "captured as opus 48 kHz stereo") |
+
+So hypothesis #1 holds and no fork code is implicated: the phone the user is
+testing with **cannot** produce device audio on any scrcpy build, because Android
+9 has no audio-playback capture API for `adb`-started processes. The Android 14
+tablet on the same binary did produce it, which is the comparison §1.1c asked for
+(quoted from the recorded run rather than re-measured: the tablet is not
+connected now, so this row cannot be refreshed on demand — see §5.1ah for how to
+re-run it).
+
+Two things the diagnosis did turn up that *are* ours to fix:
+
+* The launcher emits `--audio-codec=opus --audio-bit-rate=160K --audio-source=output`
+  regardless of the device's SDK, so the user sees audio controls that silently
+  do nothing — exactly the "NUNCA dejar un checkbox de audio que silenciosamente
+  no hace nada" case. The `ERROR: Demuxer error` line then lands in the log panel
+  with no explanation.
+* `HintShortcutsOverlay` tells the user to "Pulsa F1 aquí" (in the launcher) and
+  there is **no key handler in the launcher at all** — `grep -n "Key.F1\|KeyDown"
+  launcher/*.cs` returns nothing. The F1 overlay exists only in the mirror window.
+  That is an unverified claim in shipped text, and v3 must either implement it or
+  stop promising it.
+
+### 5.1ae The header overlap, measured instead of eyeballed
+
+`out/v3_preflight_probe.ps1` starts the packaged launcher in Spanish with the
+phone attached, waits for detection (`badge='1 dispositivo(s)'`), then walks the
+window width down and reports every pair of header controls whose UIA
+`BoundingRectangle` intersects:
+
+| Window width | Result |
+|---|---|
+| 1380 (default) | clean |
+| 1340 | clean |
+| **1260** | `DeviceCombo x BtnRefresh = 44x19px` |
+| 1180 | `BtnWireless x DeviceCombo = 7x19`, `DeviceCombo x BtnRefresh = 111x19` |
+| 1120 | `BtnWireless x DeviceCombo = 67x19`, `DeviceCombo x BtnRefresh = 111x19` |
+| 1060 | `BtnWireless x DeviceCombo = 127x19`, `DeviceCombo x BtnRefresh = 97x19` |
+| 1000 | three pairs, incl. `BtnPair x DeviceCombo = 38x19` |
+| 940 | `BtnWireless x DeviceCombo = 126x19`, `BtnPair x DeviceCombo = 98x19` |
+
+The mechanism is not the one the directive guessed. The header `Grid` is
+`Auto | 230 | * | Auto | Auto`, and the button cluster lives in the **star**
+column with `HorizontalAlignment="Right"`. Four Spanish buttons
+(`Reescanear ADB`, `Guía ADB inalámbrico`, `Emparejar inalámbrico`,
+`Conectar ip:puerto`) want ~600 px; below ~1300 px of window the star column has
+less than that left, and WPF lets a right-aligned `StackPanel` overflow **to the
+left**, over the device combo — so the combo and the button labels collide, which
+is what the user described as "el nombre tapa otros textos". The strings they
+quoted map to the real labels `Dispositivo detectado` (`LblDevice`) and
+`Emparejar inalámbrico` (`BtnPair`).
+
+`out/shots/v3_header_overlap.png` (1260 px) shows the first stage: the combo
+reads `USB <dev-id-2> (moto g(7) power` and the button behind it is cut to
+`anear ADB`. At 940 px (`out/shots/v3_shortcuts_msgbox.png`) it is `…nbrico` and
+`Conectar ippuerto`. The same pictures show two more defects in the same window
+that v3 should fix while it is in there:
+
+* the footer paths are clipped on both ends (`adb: gCapture\dist\…` — the head of
+  the path is cut off, so the string is not even readable);
+* the `COMANDO` preview box overflows its border on the right
+  (`…--game-telemetry-log --` is cut mid-flag);
+* at 940 px the `RENDIMIENTO EN VIVO` labels collide with their own values
+  (`Latencia med. (ms)` wraps onto `FPS`).
+
+### 5.1af The ATAJOS zone as it stands
+
+`OnShowShortcuts` is a `MessageBox.Show` of one localized paragraph
+(`HintShortcuts`), so the "list" the user expected is a system dialog: light-grey
+chrome inside a dark app, a blue system icon, no key column, no categories, and
+the six hotkeys flattened into running text
+(`out/shots/v3_shortcuts_msgbox.png`). The button itself has no `x:Name`, so it
+has no `AutomationId` either — the probe had to find it by its displayed text,
+which is precisely the pattern §B of v2 forbids. Redesigning it as a real table
+also makes it gateable.
+
+### 5.1ag v3 plan, in PR order
+
+| # | PR | Scope | Gate / evidence | Cost |
+|---|---|---|---|---|
+| 1 | audio honesty | badge `Audio: no soportado (Android 11+)`, disable codec/bitrate/PCM-tap/bridge controls when `Sdk < 30` with a tooltip, `Diagnóstico de audio` button (SDK, support, last server line, sink state, read-only volume), and stop emitting audio flags the device will refuse | new §16 (SKIP-safe without an API ≥30 device), §15 key parity, UIA finds the new controls | small, all launcher |
+| 2 | header + footer | 3-column header (status icon / info with `TextTrimming` + `MinWidth=0` / actions), device name capped, buttons that wrap or collapse by width, un-clipped footer paths, `COMANDO` box that scrolls instead of overflowing | §10 + §11 green; the §5.1ae probe re-run must report **zero** intersections at 940/1100/1380, connected and disconnected | small |
+| 3 | shortcuts as a table | grouped cards (Espejo / Grabación / Filtros / Ventana / Otros), keycap column in mono, action + description columns, every string through `Loc.cs`, `x:Name` on the button | new §17 (row completeness, both languages non-empty, no duplicate key inside a category, positive control with a duplicated fixture) | medium |
+| 4 | one-accent aesthetic pass | consolidate to a single accent, 8 px grid, radius 6-8, distinct hover/focus/disabled, AA contrast measured from the actual brushes, no emoji or system icons in the app's own chrome | screenshot tour of all tabs + a contrast computation in the gate | medium, mechanical |
+| 5 | live filter overlay | global hotkey `Super+Alt+F` (registered by the launcher, so it works while the mirror has focus) opening a borderless always-on-top **separate window** with the six existing filters, Esc closes, drag by header | new §18: per-frame median/p99 baseline vs overlay-open with 5 toggles, delta < 1 ms, p99 < 3 ms, fps drop ≤ 3 | large — the fork needs a live postfx parameter path (§5.1ai) |
+| 6 | filter profiles | "current" persisted, named profiles, apply-on-start, export/import with the session JSON, presets Neutral/Vivid/Cinematic/Night/Competitive | §17-style integrity check on the profile JSON, pixel assertions reused from `fx_pixel_test.sh` | medium |
+| 7 | #20 + §6 triage | borderless-at-startup fix, then implement the cheap §6 items (audio-active indicator, Presentation mode, 3 s foreground re-scan, last-config + Relaunch) and document the rest with cost/benefit | `window_style_probe.ps1` must see the caption bits cleared, and stay that way after the first frame | medium |
+
+PR 1 and 2 are independent of the fork and fix what the user can see today, so
+they land first. PR 5 is the only item that can regress the thing the user cares
+most about (latency), so it goes behind a measured gate with the documented
+fallback: if the overlay cannot be proven free, it degrades to a launcher panel
+that applies and closes, never to a window that slows the mirror.
+
+### 5.1ah How to re-run this diagnosis
+
+```
+bash -c 'cd out && powershell -NoProfile -ExecutionPolicy Bypass -File v3_preflight_probe.ps1'
+# audio, with any phone attached:
+dist/GamingScrcpy/scrcpy/scrcpy.exe --serial=<serial> \
+    --audio-source=output --audio-codec=opus --no-window --time-limit=5
+dist/GamingScrcpy/launcher/adb.exe shell getprop ro.build.version.sdk
+```
+To close the Android 11+ comparison with fresh numbers rather than the recorded
+§5.1y row, attach a device with SDK ≥ 30 and run the same command: the expected
+result is **no** `Audio disabled` line and telemetry showing `a_kbps > 0`. Manual
+check for the user's own speakers: mirror with audio, then look at
+Windows Volume mixer — the `scrcpy.exe` stream must be present and unmuted; the
+launcher's `--no-audio-playback` checkbox (PCM tap) deliberately removes it.
+
+### 5.1ai Open design question for PR 5
+
+The six filters are applied inside the mirror's own render path (measured at
+~3.24 ms/frame for 720x1280 in §5.1w), so the overlay must only *change their
+parameters*. Those parameters are read once at startup today, so a live path is
+needed: a small control pipe read by the client, writing into the postfx state
+under the same lock the LUT build already uses. That is where the risk of this
+feature lives, and §18 is what bounds it.
+
 ## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so
