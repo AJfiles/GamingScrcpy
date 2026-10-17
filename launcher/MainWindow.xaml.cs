@@ -442,7 +442,7 @@ public partial class MainWindow : Window
         var d = _devices.Count > 0 ? _devices[0] : null;
         var online = d is { State: "device" };
         var noAudio = d is { Sdk: > 0 and < 30 };
-        var good = (System.Windows.Media.Brush)FindResource("Accent2");
+        var good = (System.Windows.Media.Brush)FindResource("Good");
         var warn = (System.Windows.Media.Brush)FindResource("Warn");
         DevDot.Fill = online ? good : warn;
         DeviceBadge.Foreground = online ? good : warn;

@@ -13,8 +13,15 @@
         <SolidColorBrush x:Key="Fg" Color="#FFE8EAF0"/>
         <SolidColorBrush x:Key="FgDim" Color="#FF8D94A6"/>
         <SolidColorBrush x:Key="Accent" Color="#FF4FA3FF"/>
-        <SolidColorBrush x:Key="Accent2" Color="#FF2BD98A"/>
+        <SolidColorBrush x:Key="Good" Color="#FF2BD98A"/>
         <SolidColorBrush x:Key="Warn" Color="#FFFFB74F"/>
+        <!-- semantic states, not accents: the palette has exactly one Accent brush, and these
+             are the colours a control takes to say something happened. -->
+        <SolidColorBrush x:Key="Danger" Color="#FFC2556A"/>
+        <SolidColorBrush x:Key="PrimaryBg" Color="#FF1E3A57"/>
+        <SolidColorBrush x:Key="RecordBg" Color="#FF4A1F27"/>
+        <SolidColorBrush x:Key="StopBg" Color="#FF2A1A22"/>
+        <SolidColorBrush x:Key="ComboHi" Color="#FF27455F"/>
 
         <FontFamily x:Key="Mono">Consolas</FontFamily>
         <Thickness x:Key="Gap">8</Thickness>
@@ -72,12 +79,12 @@
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
-                            <ContentPresenter IsHitTestVisible="False" Margin="8,0,22,0"
+                            <ContentPresenter IsHitTestVisible="False" Margin="8,0,24,0"
                                               VerticalAlignment="Center" HorizontalAlignment="Left"
                                               Content="{TemplateBinding SelectionBoxItem}"
                                               ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
                             <Path HorizontalAlignment="Right" VerticalAlignment="Center"
-                                  Margin="0,0,9,0" Data="M 0 0 L 4 4 L 8 0 Z"
+                                  Margin="0,0,8,0" Data="M 0 0 L 4 4 L 8 0 Z"
                                   Fill="{StaticResource FgDim}" IsHitTestVisible="False"/>
                             <Popup Placement="Bottom" AllowsTransparency="True" Focusable="False"
                                    IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Slide">
@@ -87,7 +94,7 @@
                                         MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                         MaxHeight="300">
                                     <ScrollViewer>
-                                        <StackPanel IsItemsHost="True" Margin="3"/>
+                                        <StackPanel IsItemsHost="True" Margin="4"/>
                                     </ScrollViewer>
                                 </Border>
                             </Popup>
@@ -104,12 +111,12 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
                         <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}" CornerRadius="4">
+                                Padding="{TemplateBinding Padding}" CornerRadius="6">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#FF27455F"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource ComboHi}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -155,6 +162,14 @@
                                 <Setter TargetName="Bd" Property="BorderBrush"
                                         Value="{StaticResource Accent}"/>
                             </Trigger>
+                            <!-- focus is a shape change, not only a colour change: the
+                                 border thickens, so a keyboard user can see where they
+                                 are without relying on the hue (v3 §4.1) -->
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{StaticResource Accent}"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
                             </Trigger>
@@ -164,19 +179,19 @@
             </Setter>
         </Style>
         <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#FF1E3A57"/>
+            <Setter Property="Background" Value="{StaticResource PrimaryBg}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Accent}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="10,9"/>
         </Style>
         <Style x:Key="Record" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#FF4A1F27"/>
-            <Setter Property="BorderBrush" Value="#FFC2556A"/>
+            <Setter Property="Background" Value="{StaticResource RecordBg}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Danger}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="10,9"/>
         </Style>
         <Style x:Key="Stop" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#FF2A1A22"/>
+            <Setter Property="Background" Value="{StaticResource StopBg}"/>
             <Setter Property="BorderBrush" Value="#FF8A4A62"/>
             <Setter Property="Padding" Value="10,9"/>
         </Style>
@@ -195,7 +210,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
                         <Border x:Name="Bd" Background="Transparent" BorderThickness="0,0,0,2"
-                                BorderBrush="Transparent" Padding="12,7" Margin="0,0,2,0">
+                                BorderBrush="Transparent" Padding="12,8" Margin="0,0,4,0">
                             <ContentPresenter x:Name="Cp" ContentSource="Header"
                                               HorizontalAlignment="Center"/>
                         </Border>

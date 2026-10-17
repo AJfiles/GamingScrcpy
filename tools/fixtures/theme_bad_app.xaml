@@ -1,0 +1,20 @@
+<!-- positive control for tools/theme_audit.sh: two accents, an unnamed colour and
+     no keyboard-focus trigger. The audit must fail on this file. -->
+<Application.Resources>
+    <SolidColorBrush x:Key="Bg" Color="#FF0E0F13"/>
+    <SolidColorBrush x:Key="Panel" Color="#FF16181F"/>
+    <SolidColorBrush x:Key="Panel2" Color="#FF1D2028"/>
+    <SolidColorBrush x:Key="Line" Color="#FF2A2F3A"/>
+    <SolidColorBrush x:Key="Fg" Color="#FFE8EAF0"/>
+    <SolidColorBrush x:Key="FgDim" Color="#FF8D94A6"/>
+    <SolidColorBrush x:Key="Accent" Color="#FF4FA3FF"/>
+    <SolidColorBrush x:Key="Accent2" Color="#FF2BD98A"/>
+    <SolidColorBrush x:Key="Glow" Color="#FF7C4DFF"/>
+    <SolidColorBrush x:Key="Good" Color="#FF2BD98A"/>
+    <SolidColorBrush x:Key="Warn" Color="#FFFFB74F"/>
+    <SolidColorBrush x:Key="Danger" Color="#FFC2556A"/>
+    <SolidColorBrush x:Key="PrimaryBg" Color="#FF1E3A57"/>
+    <SolidColorBrush x:Key="RecordBg" Color="#FF4A1F27"/>
+    <SolidColorBrush x:Key="StopBg" Color="#FF2A1A22"/>
+    <SolidColorBrush x:Key="ComboHi" Color="#FF27455F"/>
+</Application.Resources>

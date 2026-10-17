@@ -673,6 +673,25 @@ else
     grep -E '^FAIL' "$fxlog" | head -12
 fi
 
+head_ "20. the theme keeps its own rules (tools/theme_audit.sh)"
+# v3 §4.1 states the rules as principles, so the audit reads the palette and the
+# templates rather than a screenshot: one accent, radius 6-8 px, no icon glyphs in
+# a visible string, a focus state that changes shape, and every text pair the
+# theme paints at WCAG AA. The fixture is the positive control.
+ta="$(bash "$ROOT/tools/theme_audit.sh" 2>&1)"; ta_rc=$?
+while IFS= read -r line; do
+    case "$line" in
+        OK\ *)   ok "${line#OK }" ;;
+        FAIL\ *) bad "${line#FAIL }" ;;
+    esac
+done <<< "$ta"
+[ "$ta_rc" -eq 0 ] || bad "theme audit exited $ta_rc on the real theme"
+tf="$(bash "$ROOT/tools/theme_audit.sh" --app-xaml "$ROOT/tools/fixtures/theme_bad_app.xaml" 2>&1)"; tf_rc=$?
+if [ "$tf_rc" -ne 0 ] && printf '%s' "$tf" | grep -q 'brushes named Accent'; then
+    ok "theme audit detects the broken palette fixture (positive control)"
+else
+    bad "theme audit did not fail on the broken fixture (rc=$tf_rc)"
+fi
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

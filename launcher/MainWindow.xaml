@@ -39,7 +39,7 @@
                 </StackPanel>
                 <StackPanel Grid.Row="0" Grid.Column="2" Margin="16,0,0,8">
                     <TextBlock Text="{DynamicResource LblLanguage}" Style="{StaticResource Hint}"/>
-                    <ComboBox x:Name="CboLanguage" Width="110" Margin="0,3,0,0"
+                    <ComboBox x:Name="CboLanguage" Width="110" Margin="0,4,0,0"
                               SelectionChanged="OnLanguageChanged"
                               ToolTip="{DynamicResource HintLanguage}">
                         <ComboBoxItem Content="{DynamicResource LangEs}"/>
@@ -60,7 +60,7 @@
                              VerticalAlignment="Center"/>
                     <TextBlock Text="{DynamicResource LblDevice}" Style="{StaticResource Hint}"
                                VerticalAlignment="Center" Margin="8,0,8,0"/>
-                    <ComboBox x:Name="DeviceCombo" MinWidth="170" MaxWidth="300"
+                    <ComboBox x:Name="DeviceCombo" MinWidth="168" MaxWidth="300"
                               VerticalAlignment="Center">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
@@ -77,13 +77,13 @@
                 <WrapPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal"
                            HorizontalAlignment="Right" MaxWidth="580" Margin="0,0,0,4">
                     <Button x:Name="BtnRefresh" Content="{DynamicResource BtnRescan}"
-                            Click="OnRefreshDevices" Margin="6,0,0,0"/>
+                            Click="OnRefreshDevices" Margin="8,0,0,0"/>
                     <Button x:Name="BtnWireless" Content="{DynamicResource BtnWireless}"
-                            Click="OnWirelessGuide" Margin="6,0,0,0"/>
+                            Click="OnWirelessGuide" Margin="8,0,0,0"/>
                     <Button x:Name="BtnPair" Content="{DynamicResource BtnPair}"
-                            Click="OnPairWireless" Margin="6,0,0,0"/>
+                            Click="OnPairWireless" Margin="8,0,0,0"/>
                     <Button x:Name="BtnConnect" Content="{DynamicResource BtnConnect}"
-                            Click="OnConnectWireless" Margin="6,0,0,0"/>
+                            Click="OnConnectWireless" Margin="8,0,0,0"/>
                 </WrapPanel>
 
                 <TextBlock x:Name="TxtDeviceSummary" Grid.Row="2" Grid.Column="0"
@@ -169,16 +169,16 @@
                                        Style="{StaticResource SectionHeader}"/>
                             <WrapPanel>
                                 <TextBlock Text="{DynamicResource LblModel}" Style="{StaticResource FieldLabel}"
-                                           Margin="0,0,6,0"/>
+                                           Margin="0,0,8,0"/>
                                 <TextBlock x:Name="TxtDeviceModel" Style="{StaticResource Num}"
                                            Text="--" FontFamily="Segoe UI" Margin="0,0,16,0"/>
                                 <TextBlock Text="{DynamicResource LblBattery}" Style="{StaticResource FieldLabel}"
-                                           Margin="0,0,6,0"/>
+                                           Margin="0,0,8,0"/>
                                 <TextBlock x:Name="TxtDeviceBattery" Style="{StaticResource Num}" Text="--"/>
                                 <TextBlock Text="{DynamicResource LblTemperature}" Style="{StaticResource FieldLabel}"
                                            Margin="16,0,6,0"/>
                                 <TextBlock x:Name="TxtDeviceTemp" Style="{StaticResource Num}" Text="--"/>
-                                <Button Content="{DynamicResource BtnRescan}" Margin="16,0,0,0" Width="80"
+                                <Button Content="{DynamicResource BtnRescan}" Margin="16,0,0,0" MinWidth="80"
                                         Style="{StaticResource Chip}" Click="OnRefreshDevice"/>
                             </WrapPanel>
                             <TextBlock Text="{DynamicResource HintDevicePanel}" Style="{StaticResource Hint}"/>
@@ -233,7 +233,7 @@
                                 <TextBlock Grid.Row="0" Text="{DynamicResource LblVideoCodec}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboVideoCodec" Grid.Row="0" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="h264"/>
                                     <ComboBoxItem Content="{DynamicResource ItemHevc}"/>
                                     <ComboBoxItem Content="av1"/>
@@ -245,13 +245,13 @@
                                 <TextBlock Grid.Row="1" Text="{DynamicResource LblBitrate}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboBitrate" Grid.Row="1" Grid.Column="1"
-                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
+                                          Margin="0,4" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="1" Grid.Column="2" x:Name="LblBitrate"
                                            Style="{StaticResource Num}" Text="16 Mb/s"/>
                                 <TextBlock Grid.Row="6" Text="{DynamicResource LblEncoder}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboEncoderPreset" Grid.Row="6" Grid.Column="1"
-                                          Margin="0,2" SelectionChanged="OnStepChanged"
+                                          Margin="0,4" SelectionChanged="OnStepChanged"
                                           ToolTip="{DynamicResource TipEncoderPreset}">
                                     <ComboBoxItem Content="{DynamicResource ItemEncoderDefault}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemEncoderUltrafast}"/>
@@ -265,13 +265,13 @@
                                 <TextBlock Grid.Row="2" Text="{DynamicResource LblMaxFps}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboMaxFps" Grid.Row="2" Grid.Column="1"
-                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
+                                          Margin="0,4" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="2" Grid.Column="2" x:Name="LblMaxFps"
                                            Style="{StaticResource Num}" Text="60 fps"/>
                                 <TextBlock Grid.Row="3" Text="{DynamicResource LblAudioCodec}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboAudioCodec" Grid.Row="3" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="opus"/>
                                     <ComboBoxItem Content="aac"/>
                                     <ComboBoxItem Content="raw"/>
@@ -279,13 +279,13 @@
                                 <TextBlock Grid.Row="4" Text="{DynamicResource LblAudioBitrate}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboAudioBitrate" Grid.Row="4" Grid.Column="1"
-                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
+                                          Margin="0,4" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="4" Grid.Column="2" x:Name="LblAudioBitrate"
                                            Style="{StaticResource Num}" Text="128 kbps"/>
                                 <TextBlock Grid.Row="5" Text="{DynamicResource LblHwdec}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboHwdec" Grid.Row="5" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="{DynamicResource ItemHwAuto}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemHwOff}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemHwD3d}"/>
@@ -315,7 +315,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="{DynamicResource LblRenderer}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <ComboBox x:Name="CboDriver" Grid.Row="0" Grid.Column="1" Margin="0,2">
+                                <ComboBox x:Name="CboDriver" Grid.Row="0" Grid.Column="1" Margin="0,4">
                                     <ComboBoxItem Content="direct3d11"/>
                                     <ComboBoxItem Content="opengl"/>
                                     <ComboBoxItem Content="vulkan"/>
@@ -323,7 +323,7 @@
                                 </ComboBox>
                                 <TextBlock Grid.Row="1" Text="{DynamicResource LblUpscale}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <ComboBox x:Name="CboUpscale" Grid.Row="1" Grid.Column="1" Margin="0,2">
+                                <ComboBox x:Name="CboUpscale" Grid.Row="1" Grid.Column="1" Margin="0,4">
                                     <ComboBoxItem Content="{DynamicResource ItemUpscaleLinear}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemUpscalePixel}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemUpscaleNearest}"/>
@@ -332,7 +332,7 @@
                                 <TextBlock Grid.Row="2" Text="{DynamicResource LblWindowKernel}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboWindowFilter" Grid.Row="2" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="{DynamicResource ItemWinOff}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemWinLanczos}"/>
                                     <ComboBoxItem Content="bicubic"/>
@@ -345,7 +345,7 @@
                                 <TextBlock Grid.Row="3" Text="{DynamicResource LblHostTarget}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboHostPreset" Grid.Row="3" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="{DynamicResource ItemFitAspect}"/>
                                     <ComboBoxItem Content="1920x1080"/>
                                     <ComboBoxItem Content="2560x1440"/>
@@ -356,7 +356,7 @@
                                 <TextBlock Grid.Row="4" Text="{DynamicResource LblFitMode}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboRenderFit" Grid.Row="4" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="letterbox"/>
                                     <ComboBoxItem Content="stretched"/>
                                     <ComboBoxItem Content="unscaled"/>
@@ -364,13 +364,13 @@
                                 <TextBlock Grid.Row="5" Text="{DynamicResource LblVideoBuffer}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboVideoBuffer" Grid.Row="5" Grid.Column="1"
-                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
+                                          Margin="0,4" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="5" Grid.Column="2" x:Name="LblVideoBuffer"
                                            Style="{StaticResource Num}" Text="0 ms"/>
                                 <TextBlock Grid.Row="6" Text="{DynamicResource LblAudioBuffer}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboAudioOutBuffer" Grid.Row="6" Grid.Column="1"
-                                          Margin="0,2" SelectionChanged="OnStepChanged"/>
+                                          Margin="0,4" SelectionChanged="OnStepChanged"/>
                                 <TextBlock Grid.Row="6" Grid.Column="2" x:Name="LblAudioOutBuffer"
                                            Style="{StaticResource Num}" Text="120 ms"/>
                             </Grid>
@@ -396,7 +396,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="{DynamicResource LblOsd}"
                                            Style="{StaticResource FieldLabel}"/>
-                                <ComboBox x:Name="CboOsd" Grid.Row="0" Grid.Column="1" Margin="0,2">
+                                <ComboBox x:Name="CboOsd" Grid.Row="0" Grid.Column="1" Margin="0,4">
                                     <ComboBoxItem Content="{DynamicResource ItemOsdFull}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemOsdCompact}"/>
                                     <ComboBoxItem Content="{DynamicResource ItemOsdNone}"/>
@@ -533,26 +533,26 @@
                                 <TextBlock Grid.Row="0" Text="{DynamicResource LblContainer}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboContainer" Grid.Row="0" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="mkv"/>
                                     <ComboBoxItem Content="mp4"/>
                                 </ComboBox>
                                 <TextBlock Grid.Row="1" Text="{DynamicResource LblRecordFile}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="TxtRecordPath" Grid.Row="1" Grid.Column="1"
-                                         Margin="0,2"/>
+                                         Margin="0,4"/>
                                 <Button Grid.Row="1" Grid.Column="2" Content="…" Width="30"
-                                        Margin="6,2,0,2" Click="OnBrowseRecord"/>
+                                        Margin="8,4,0,4" Click="OnBrowseRecord"/>
                                 <TextBlock Grid.Row="2" Text="{DynamicResource LblFrameBridge}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="TxtFrameBridge" Grid.Row="2" Grid.Column="1"
-                                         Margin="0,2" ToolTip="{DynamicResource TipFrameBridge}"/>
+                                         Margin="0,4" ToolTip="{DynamicResource TipFrameBridge}"/>
                                 <TextBlock Grid.Row="3" Text="{DynamicResource LblBridgeScale}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="TxtBridgeScale" Grid.Row="3" Grid.Column="1"
-                                         Margin="0,2" ToolTip="{DynamicResource TipBridgeScale}"/>
+                                         Margin="0,4" ToolTip="{DynamicResource TipBridgeScale}"/>
                                 <StackPanel Grid.Row="3" Grid.Column="2" Orientation="Horizontal"
-                                            Margin="6,2,0,2">
+                                            Margin="8,4,0,4">
                                     <Button Content="1080p" Width="54" Click="OnBridgePreset"
                                             Tag="1920x1080"/>
                                     <Button Content="1440p" Width="58" Margin="4,0,0,0"
@@ -563,7 +563,7 @@
                                 <TextBlock Grid.Row="4" Text="{DynamicResource LblBridgeKernel}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <ComboBox x:Name="CboBridgeFilter" Grid.Row="4" Grid.Column="1"
-                                          Margin="0,2">
+                                          Margin="0,4">
                                     <ComboBoxItem Content="lanczos"/>
                                     <ComboBoxItem Content="bicubic"/>
                                     <ComboBoxItem Content="bilinear"/>
@@ -574,22 +574,22 @@
                                 <TextBlock Grid.Row="5" Text="{DynamicResource LblAudioBridge}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="TxtAudioBridge" Grid.Row="5" Grid.Column="1"
-                                         Margin="0,2" ToolTip="{DynamicResource TipAudioBridge}"/>
+                                         Margin="0,4" ToolTip="{DynamicResource TipAudioBridge}"/>
                                 <TextBlock Grid.Row="6" Text="{DynamicResource LblPcmTap}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="TxtAudioPcm" Grid.Row="6" Grid.Column="1"
-                                         Margin="0,2" ToolTip="{DynamicResource TipPcmTap}"/>
+                                         Margin="0,4" ToolTip="{DynamicResource TipPcmTap}"/>
                                 <CheckBox x:Name="ChkPcmMute" Grid.Row="6" Grid.Column="2"
-                                          Margin="6,2,0,2" VerticalAlignment="Center"
+                                          Margin="8,4,0,4" VerticalAlignment="Center"
                                           Content="{DynamicResource ChkMutePc}" ToolTip="{DynamicResource TipMutePc}"/>
                                 <TextBlock Grid.Row="7" Text="{DynamicResource LblExtraArgs}"
                                            Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="TxtExtraArgs" Grid.Row="7" Grid.Column="1"
-                                         Margin="0,2"/>
+                                         Margin="0,4"/>
                             </Grid>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="{DynamicResource BtnCopyObs}" Click="OnCopyObsCommand"/>
-                                <Button Content="{DynamicResource BtnCopyCommand}" Margin="6,0,0,0"
+                                <Button Content="{DynamicResource BtnCopyCommand}" Margin="8,0,0,0"
                                         Click="OnCopyCommand"/>
                             </StackPanel>
                             <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
@@ -612,7 +612,7 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{DynamicResource LblKeyboard}"
                                        Style="{StaticResource FieldLabel}"/>
-                            <ComboBox x:Name="CboKeyboard" Grid.Row="0" Grid.Column="1" Margin="0,2">
+                            <ComboBox x:Name="CboKeyboard" Grid.Row="0" Grid.Column="1" Margin="0,4">
                                 <ComboBoxItem Content="{DynamicResource ItemAutoDefault}"/>
                                 <ComboBoxItem Content="sdk"/>
                                 <ComboBoxItem Content="uhid"/>
@@ -621,7 +621,7 @@
                             </ComboBox>
                             <TextBlock Grid.Row="1" Text="{DynamicResource LblMouse}"
                                        Style="{StaticResource FieldLabel}"/>
-                            <ComboBox x:Name="CboMouse" Grid.Row="1" Grid.Column="1" Margin="0,2">
+                            <ComboBox x:Name="CboMouse" Grid.Row="1" Grid.Column="1" Margin="0,4">
                                 <ComboBoxItem Content="{DynamicResource ItemAutoDefault}"/>
                                 <ComboBoxItem Content="sdk"/>
                                 <ComboBoxItem Content="{DynamicResource ItemUhidMouse}"/>
@@ -630,7 +630,7 @@
                             </ComboBox>
                             <TextBlock Grid.Row="2" Text="{DynamicResource LblGamepad}"
                                        Style="{StaticResource FieldLabel}"/>
-                            <ComboBox x:Name="CboGamepad" Grid.Row="2" Grid.Column="1" Margin="0,2">
+                            <ComboBox x:Name="CboGamepad" Grid.Row="2" Grid.Column="1" Margin="0,4">
                                 <ComboBoxItem Content="{DynamicResource ItemDisabled}"/>
                                 <ComboBoxItem Content="{DynamicResource ItemUhidAdb}"/>
                                 <ComboBoxItem Content="{DynamicResource ItemAoaUsb}"/>
@@ -645,9 +645,9 @@
                             <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
                                         Margin="0,24,0,0">
                                 <ListBox x:Name="KeymapList" Height="100"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <Button Content="{DynamicResource BtnApplyKeymap}" Click="OnApplyKeymap"/>
-                                    <Button Content="{DynamicResource BtnOpenKeymapDir}" Margin="6,0,0,0"
+                                    <Button Content="{DynamicResource BtnOpenKeymapDir}" Margin="8,0,0,0"
                                             Click="OnOpenKeymapDir"/>
                                 </StackPanel>
                                 <Border Style="{StaticResource Card}" Margin="0,8,0,0">
@@ -670,7 +670,7 @@
                             <TextBlock Text="{DynamicResource SecProfiles}" Style="{StaticResource SectionHeader}"/>
                             <ListBox x:Name="ProfileList" Height="150"
                                      SelectionChanged="OnProfileSelected"/>
-                            <Grid Margin="0,6,0,0">
+                            <Grid Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
@@ -689,7 +689,7 @@
                                 <Button Grid.Column="5" Content="{DynamicResource BtnImportJson}"
                                         Margin="4,0,0,0" Click="OnImportProfiles"/>
                             </Grid>
-                            <TextBox x:Name="TxtProfileName" Margin="0,6,0,0"
+                            <TextBox x:Name="TxtProfileName" Margin="0,8,0,0"
                                      ToolTip="{DynamicResource HintProfileName}"/>
                         </StackPanel>
                     </ScrollViewer>
@@ -729,7 +729,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                             Margin="0,0,16,0">
                     <TextBlock Text="{DynamicResource LblScrcpy}" Style="{StaticResource Hint}"/>
-                    <TextBlock x:Name="TxtScrcpyPath" Margin="6,0,0,0"
+                    <TextBlock x:Name="TxtScrcpyPath" Margin="8,0,0,0"
                                Style="{StaticResource Num}" FontFamily="Segoe UI"
                                Foreground="{StaticResource Fg}"
                                Text="{DynamicResource ValNotSet}"
@@ -738,7 +738,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{DynamicResource LblAdb}" Style="{StaticResource Hint}"/>
-                    <TextBlock x:Name="TxtAdbPath" Margin="6,0,0,0"
+                    <TextBlock x:Name="TxtAdbPath" Margin="8,0,0,0"
                                Style="{StaticResource Num}" FontFamily="Segoe UI"
                                Foreground="{StaticResource Fg}" Text="{DynamicResource ValNotFound}"
                                MinWidth="0" TextTrimming="CharacterEllipsis"/>

@@ -15,11 +15,11 @@ something could not be measured, it says so.
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,201,480 bytes (rebuilt again for the v3 §3 shortcut table, §5.1al: +20,480 bytes over the §5.1ak audio-honesty build), window verified on screen and the new panel read back through UI Automation in both languages |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,201,480 bytes (rebuilt for the v3 §3 shortcut table in §5.1al and again for the §4 theme pass in §5.1am, the byte size unchanged), window verified on screen, the shortcut panel read back through UI Automation in both languages, and the theme audited by section 20 |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
-| Validation tooling | `dist\GamingScrcpy\tools\*` (17 scripts + `fixtures\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh` and `bash tools/fx_pixel_test.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,330,346 bytes (≈120.5 MiB) at the v3 §3 shortcut-table repack; `Expand-Archive` into an empty directory yields **140 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\` and the root), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138; both are superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (18 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/render_driver_test.sh 20` (`OK`, `direct3d11 presented=20/20`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=27 categories=3`) with its duplicate-key fixture failing as required (`SHORTCUTS FAIL issues=2`, exit 1), and `powershell tools/shortcuts_table_test.ps1` (`SHORTCUT-TABLE OK`, 27 rows in each language) — that last one finds its launcher one level up, because an extracted package has no build tree |
-| Regression suite | `tools\verify_all.sh` | **145 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr4.log`, §5.1al — 137 of those lines are the checks that were already green in §5.1ak and the other 8 are section 17, the shortcut table: three assertions in each of the two languages plus the validator and its positive control); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
+| Validation tooling | `dist\GamingScrcpy\tools\*` (19 scripts + `fixtures\` + `theme\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh`, `bash tools/fx_pixel_test.sh` and `bash tools/theme_audit.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` (or its inputs under `tools\theme\`) when there is no build tree |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,357,530 bytes measured on the archive built from this tree, 126,357,592 on the one repacked after that measurement — ≈120.5 MiB either way, and the copy of this report inside the archive can only ever carry the figure from the previous repack, because the report is inside its own archive; `Expand-Archive` into an empty directory yields **145 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\`, `tools\theme\`), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138, then 140; every one of those is superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (19 scripts + `fixtures\` + `theme\`), so a user can re-run the pixel assertions, the filter checks, the latency matrix and the theme audit without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/render_driver_test.sh 20` (`OK`, `direct3d11 presented=20/20`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `bash tools/theme_audit.sh` (`THEME OK pairs=15`) with its broken-palette fixture failing as required (`THEME FAIL issues=4`, exit 1), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=27 categories=3`) with its duplicate-key fixture — `--validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"` — failing as required (`SHORTCUTS FAIL issues=2`, exit 1), and `powershell tools/shortcuts_table_test.ps1` (`SHORTCUT-TABLE OK`, 27 rows in each language) — that last one finds its launcher one level up, because an extracted package has no build tree |
+| Regression suite | `tools\verify_all.sh` | **151 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr5.log` — 145 of those lines were already green at §5.1al and the 6 new ones are section 20, the theme audit: single accent, radius range, no symbol glyphs, a keyboard-focus trigger in the templates, 15 measured contrast pairs and its broken-palette positive control; §5.1am); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
 
@@ -2258,6 +2258,107 @@ rather than a PR-4 regression: PR-4 changes no C code, and the `scrcpy.exe` and
 `gamingdemo.exe` binaries are the ones §5.1ak shipped green. What it does prove
 is that a wedged host process is worth recognising from the *log's* mtime, not
 from the process list.
+
+### 5.1am PR 5 — the aesthetic pass, with its rules written down as a check
+
+Directive §4 lists principles, which is another way of saying they had been
+broken. Each one is now either held by the theme or asserted by the new gate
+section 20 (`tools/theme_audit.sh`), which reads the palette and the control
+templates instead of trusting a screenshot.
+
+**One accent, chosen by measurement.** The theme had two: `Accent #4FA3FF` and
+`Accent2 #2BD98A`. There is now exactly one brush named `Accent`, and the green
+became `Good`, a *state* colour beside `Warn` and `Danger` — it is only ever used
+for "this device can do the thing" text, which is a status, not a decoration. The
+same reasoning keeps the record red (`RecordBg` / `Danger`): a record button that
+is not red breaks a stronger convention than a palette rule. Both colours the
+directive proposed were measured before being set aside: `#7C4DFF` reaches only
+**2.43:1** on the primary button and **2.07:1** on the highlighted combo item, so
+it fails AA for text on surfaces that already exist, while `#4FA3FF` reaches
+**7.31:1** on the window background and **6.22:1** on the raised surface.
+`#00E5A8` does pass (11.7:1 on the background) but would have meant repainting
+every filled control for no measurable gain, so the existing accent stayed.
+
+**Contrast, computed from the brushes rather than picked from a swatch:** `Fg`
+15.92 / 14.74 / 13.54 on `Bg` / `Panel` / `Panel2`; `FgDim` 6.31 / 5.84 / 5.37;
+`Accent` 7.31 / 6.77 / 6.22; `Fg` on the filled buttons 9.71 (`PrimaryBg`), 11.51
+(`RecordBg`), 13.75 (`StopBg`), 8.30 (`ComboHi`); `Good` 9.62 and `Warn` 10.25 on
+`Panel`. The worst of the 15 pairs the theme actually paints is 5.37:1, so all of
+them clear the 4.5:1 AA bar for text — and the audit asserts exactly that, pair
+by pair.
+
+**Focus is now a shape.** The button template carried a hover trigger and a
+disabled trigger but no focus trigger, so a keyboard user had only the hue to go
+on, which is the one thing §4.1 rules out. `IsKeyboardFocused` now thickens the
+border from 1 px to 2 px in the accent on top of the colour change; hover keeps
+the 1 px accent border and disabled keeps 45 % opacity, so the three states are
+told apart without relying on colour.
+
+**Radius and spacing.** The only outlier was the combo item at 4 px; every corner
+is now 6 or 8 px and the audit fails the build if any `CornerRadius` leaves that
+range. The spacing sweep moved the off-grid values onto a 4 px half-step of the
+8 px rhythm: `0,2` → `0,4` (26 places), `6,0,0,0` → `8,0,0,0`, `0,3,0,0` →
+`0,4,0,0`, `6,2,0,2` → `8,4,0,4`, control height 26 → 24, button padding `10,6`
+and `10,9` → `12,8`, tab padding `12,7` → `12,8`, combo popup arrow margin 9 → 8
+and selection margin 22 → 24.
+
+**No mixed icon sets.** The four one-click buttons carried `▶ / ● / ■` prefixes in
+their localized labels — geometric symbols, which is exactly the "do not mix
+emoji with icons" case, and they also made the strings differ in width between
+languages for no reason. They are gone; those buttons are told apart by style
+(filled accent, filled red, plain) and by weight. The audit fails if any arrow,
+geometric shape, dingbat or astral-plane code point appears in `Loc.cs` again,
+while punctuation such as `…` or `–` stays allowed.
+
+**What the screenshot tour caught.** §4.3 asks for a tour of the seven tabs, and
+producing it found a regression this very pass had introduced: the device panel's
+rescan button carried a hard `Width="80"`, and the wider button padding pushed
+"Rescan ADB" past it, so the label clipped to `Rescan AD`. `Width` became
+`MinWidth`, the button now sizes to its content in either language, and the
+re-taken `out\shots\v4_tab_1_quick.png` shows it whole. Worth recording because
+it is the general lesson: a spacing sweep is a layout change, and only the
+rendered window can say whether it still fits.
+
+The tour itself is seven files, `out\shots\v4_tab_1_quick.png` through
+`v4_tab_7_advanced.png`, taken from the packaged launcher by selecting each
+`TabItem` through UI Automation and capturing the window rectangle.
+
+**Gate.** `bash tools/verify_all.sh` with the moto g(7) power attached: **151
+passed, 0 failed** (`out\gate_v3_pr5.log`), the 145 of §5.1al plus the six lines
+of section 20. The first run of this PR reported 150/1 and the one failure was
+the audio-bridge pipe check reading `79800 399` instead of `80000 400` — one
+sample short of the expected window, the same busy-host family recorded in §5.1ab
+and §5.4. Run standalone twice on a quiet desktop it produced `80000 400` both
+times, and the re-run of the whole suite is the 151/0 above, so the flake is
+named rather than waved through.
+
+**Packaging, and what the extraction caught.** The directive's deliverable is the
+extracted ZIP running its own tests, so the PR-5 package was unzipped into a clean
+directory and every check re-run there. `theme_audit.sh` failed: it read
+`launcher\App.xaml`, `launcher\Loc.cs` and `launcher\*.xaml`, and an extracted
+package has no build tree — the launcher is a single exe there. Worse than the
+failure itself were its 18 lines, six of which claimed "a colour is missing from
+the palette" for colours that were plainly in the file: grepping a nonexistent
+path yields nothing, and the audit reported that nothing as a palette defect
+instead of a missing input. Fixed by shipping the three theme inputs inside the
+package (`tools\theme\App.xaml`, `Loc.cs`, `MainWindow.xaml`) and giving the
+script a per-input fallback plus an explicit `THEME FAIL inputs=missing` exit 1
+before any check runs, so an absent source can never again be dressed up as a
+design finding. The fallback is per input rather than all-or-nothing because
+`--app-xaml` legitimately points at a fixture while the radius census reads the
+real XAML — the first version gated every input on App.xaml and broke exactly that
+invocation, which the fixture run inside the extraction caught. Both trees now
+agree: build tree `THEME OK pairs=15` / fixture `issues=4`; package `THEME OK
+pairs=15` / fixture `issues=4`, exit 1. The same run also corrected a wrong claim
+in this report: the duplicate-key shortcut fixture had to be passed as
+`--validate-shortcuts "--shortcuts-file=…"`; the bare path argument is ignored by
+the launcher, so an earlier manual attempt printed `SHORTCUTS OK` against the
+fixture and would have looked like a broken positive control. The 151/0 above was
+measured before this script edit, and only two lines of the audit can differ after
+it — the inputs-missing guard and the fallback, neither of which is reached when
+`launcher\` exists — so both section 20 invocations were re-run standalone against
+the build tree rather than repeating the whole suite; the next full run is the one
+that carries gate §18.
 
 ## 6. What could NOT be validated here, and why
 

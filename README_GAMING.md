@@ -642,11 +642,20 @@ FFmpeg-based consumers.
 
 ## 9. Launcher features
 
-* **Layout** — dark theme (`#0E0F13` on `#16181F`, one accent, monospaced
-  numbers) and seven tabs: **Quick**, **Capture**, **Presentation**, **Filters**,
-  **Recording / OBS**, **Control**, **Advanced**. Nothing was removed by the
-  redesign, only regrouped: 93 named controls are asserted present in the live
-  window by `tools/launcher_uiauto.ps1` (gate section 10).
+* **Layout** — dark theme (`#0E0F13` on `#16181F`) with **one** accent
+  (`#4FA3FF`, 7.31:1 on the window background); the green, amber and red are
+  *state* colours (`Good` / `Warn` / `Danger`), not second accents. Corner radius
+  is 6–8 px everywhere, spacing sits on an 8 px rhythm with a 4 px half-step,
+  numbers and key combinations are monospaced, and no visible string carries an
+  icon glyph — the `▶ ● ■` prefixes the one-click buttons used to have are gone.
+  Keyboard focus thickens the control's border instead of only changing its hue.
+  `tools/theme_audit.sh` (gate section 20) reads the palette and the templates and
+  fails the build if any of that drifts, including a WCAG AA check of the 15
+  foreground/background pairs the theme actually paints (worst: 5.37:1). Seven
+  tabs: **Quick**, **Capture**, **Presentation**, **Filters**, **Recording /
+  OBS**, **Control**, **Advanced**. Nothing was removed by the redesign, only
+  regrouped: 93 named controls are asserted present in the live window by
+  `tools/launcher_uiauto.ps1` (gate section 10).
 * **Device auto-detection** — `adb devices -l` plus `adb mdns services` for
   wireless-only devices; USB vs Wi-Fi classified; model read with `getprop`.
   The header shows it as a state dot, the picker, a count badge, and one quiet
