@@ -93,6 +93,14 @@ Everything upstream still works, with the exact tokens this build accepts
 `--shortcut-mod=lctrl,lalt,lsuper` (comma separated; the old `s+cc` form was
 removed upstream), `--video-buffer=`, `--audio-output-buffer=`.
 
+The codec has to exist on the phone, not just on the PC: an AV1 encoder needs
+Android 10 (SDK 29) and any device audio needs Android 11 (SDK 30). The launcher
+reads `ro.build.version.sdk` (read-only `getprop`) when it lists a device, and if
+an AV1 profile is launched against an older phone it substitutes h264 and writes
+that into the log instead of starting a session the device cannot serve — seen on
+a moto g(7) power (Android 9, SDK 28), where the same profile with h264 mirrors
+normally and AV1 kills the server before a window appears.
+
 All three `--render-driver` backends are validated on this host without a phone:
 `bash tools/render_driver_test.sh` runs the full presentation path (low-latency
 hint, borderless fullscreen, window filter, OSD, frame bridge) through
@@ -444,6 +452,16 @@ What still needs your hands and eyes:
     every setting under `out/fx/`) and, on a real device,
     `bash tools/device_filter_test.sh`, which additionally asserts the tablet's
     brightness state read before and after is identical.
+13. **A mirror that opens and closes itself on an older phone** — if the log
+    panel shows a `MediaCodec.createEncoderByType` / `SurfaceEncoder` stack and
+    `scrcpy exited with code 2`, the phone refused to create its video encoder;
+    nothing on the PC is wrong. Measured on a moto g(7) power (Android 9): 5 of 6
+    back-to-back launcher sessions died that way at 60 fps / 50 Mbps, while the
+    identical command line run from a terminal started normally, and the launcher
+    worked again after ~75 s without a session. Do it yourself to confirm on your
+    hardware: start a mirror, press Stop, wait a minute, start again — if the
+    second attempt comes up, it was the codec release, not the profile. Lowering
+    fps or bitrate also avoids it, and the Android 14 tablet never showed it.
 
 ### The read-only rule
 

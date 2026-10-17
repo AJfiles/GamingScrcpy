@@ -393,6 +393,18 @@ public partial class MainWindow : Window
                 {
                     Log(Loc.Format("LogDeviceModel", model));
                 }
+                // Read-only, and the only way to know before starting whether
+                // this device can encode AV1 at all.
+                var sdkText = await Adb.GetDevicePropAsync(first.Serial,
+                    "ro.build.version.sdk");
+                if (int.TryParse(sdkText, out var sdk) && sdk > 0)
+                {
+                    _devices[0] = first with { Sdk = sdk, Model = model };
+                    DeviceCombo.Items[0] = _devices[0].Display;
+                    // Replacing an item drops the selection, which would leave
+                    // the user with a device in the box and none selected.
+                    DeviceCombo.SelectedIndex = 0;
+                }
             }
         }
         else
@@ -458,15 +470,25 @@ public partial class MainWindow : Window
         await RefreshDevicesAsync();
     }
 
-    private string? SelectedSerial()
+    private AndroidDevice? SelectedDevice()
     {
         if (_devices.Count == 0 || DeviceCombo.SelectedIndex < 0)
+        {
+            return null;
+        }
+        return _devices[DeviceCombo.SelectedIndex];
+    }
+
+    private string? SelectedSerial()
+    {
+        var device = SelectedDevice();
+        if (device == null)
         {
             MessageBox.Show(this, Loc.T("DlgNoDeviceBody"), Loc.T("AppName"),
                             MessageBoxButton.OK, MessageBoxImage.Information);
             return null;
         }
-        return _devices[DeviceCombo.SelectedIndex].Serial;
+        return device.Serial;
     }
 
     // ------------------------------------------------------------------
@@ -500,6 +522,17 @@ public partial class MainWindow : Window
         }
 
         var cfg = Collect();
+        // A device with no AV1 encoder does not say so: the server dies while
+        // configuring the codec and the client exits without ever opening a
+        // window. Measured on a moto g(7) power (Android 9, SDK 28), where
+        // --video-codec=av1 logs "Demuxer 'video': stream disabled due to
+        // connection error" and h264 on the same phone mirrors fine.
+        var device = SelectedDevice();
+        if (device is { Sdk: > 0 } && cfg.VideoCodec == "av1" && device.Sdk < 29)
+        {
+            cfg.VideoCodec = "h264";
+            Log(Loc.Format("LogAv1Fallback", device.Sdk));
+        }
         if (record)
         {
             cfg.Record = true;

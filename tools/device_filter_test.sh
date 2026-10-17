@@ -77,13 +77,24 @@ run_case graded --video-codec=h264 --video-buffer=0 --game-low-latency \
 
 summary() { grep -o 'telemetry-summary:.*' "$tmp/$1.log" | tail -1; }
 
+# The summary counts the seconds in which at least one frame arrived, so a
+# session over a static screen (a launcher home page) reports almost none and
+# its percentiles describe one frame. Pass in that case would mean "a number was
+# printed", so require a quarter of the window to have frames and say otherwise.
+min_secs=$(( SECS / 4 ))
 for c in plain graded; do
-    if [ -n "$(summary $c)" ]; then
-        echo "PASS filters $c produced a latency summary: $(summary $c)"
-    else
+    s="$(summary $c)"
+    secs=$(printf '%s' "$s" | sed -n 's/.*seconds=\([0-9]*\).*/\1/p')
+    if [ -z "$s" ]; then
         echo "FAIL filters $c produced no telemetry summary"
         tail -5 "$tmp/$c.log"
         fail=1
+    elif [ "${secs:-0}" -lt "$min_secs" ]; then
+        echo "SKIP filters $c: only ${secs:-0} of ${SECS}s had a new frame ($s)"
+        echo "SKIP why: the encoder only emits on content change -- put a moving"
+        echo "SKIP      screen on the device (a game, a video) and re-run"
+    else
+        echo "PASS filters $c produced a latency summary: $s"
     fi
 done
 

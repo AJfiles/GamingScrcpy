@@ -15,11 +15,11 @@ something could not be measured, it says so.
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,168,712 bytes, window verified on screen |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,172,808 bytes (rebuilt for the AV1 capability fix, §5.1aa), window verified on screen |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (17 scripts + `fixtures\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh` and `bash tools/fx_pixel_test.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,285,991 bytes (≈120.4 MiB) in 145 entries at the last repack, built with `Compress-Archive` from `dist\GamingScrcpy\*`. The entry count grew from 130 because the three harnesses written for §D/§C (`fx_pixel_test.sh`, `device_filter_test.sh`, `device_latency_matrix.sh`) and the fixtures directory travel with the package, so a user can re-run the pixel assertions and the latency matrix without a build tree. The count and the size shift by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. Verified by extraction: `Expand-Archive` into an empty directory, then `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`) from inside it, all exit 0 |
-| Regression suite | `tools\verify_all.sh` | 120 checks, 0 failed in the last run with a device attached (§5.4, §5.1n, §5.1o, §5.1p, §5.1q). The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,296,395 bytes (≈120.5 MiB) at the last repack; `Expand-Archive` into an empty directory yields **160 files under 7 directories**, counted from the extraction rather than from an archive entry list. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (17 scripts + `fixtures\`), so a user can re-run the pixel assertions, the filter checks and the latency matrix without a build tree. Verified from that extraction: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`), `bash tools/render_driver_test.sh 20` (4 backends, `OK`) and `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), all exit 0 |
+| Regression suite | `tools\verify_all.sh` | **137 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_motorola_final.log`, §5.1ab); the earlier Lenovo TB-9707F run reached the same 137/0 (§5.1y, §5.4). The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
 
@@ -1534,6 +1534,165 @@ trimmed on the left (`gCapture\dist\...\adb.exe`) because the footer gives the
 path a fixed width. Cosmetic only -- the resolved path it prints is the real one
 used to launch, and section 11 proves a session starts from it.
 
+### 5.1z A second device: the same harnesses on a Motorola, and what changed
+
+The Lenovo tablet was swapped for a **moto g(7) power** (serial `<dev-id-2>`,
+`ro.product.model` read with `adb shell getprop`, native mirror **720x1520**).
+Nothing in the harnesses names a device, so the same scripts ran unmodified --
+which is the point of writing them as probes rather than as one-off commands.
+
+`tools/device_filter_test.sh` on the Motorola: `FILTDEV OK`, with the grade
+reaching the engine (`Host post-processing enabled (sharpen=0 night=0 sat=130
+contrast=140 brightness=120 gamma=130)`), the plain session installing no grade,
+**both sessions capturing the same 720x1520** (the §4.1 constraint holds on a
+second vendor and a different panel), and the read-only `dumpsys display`
+snapshot identical before and after, so the grade never touched the device's own
+brightness.
+
+The two latency lines came back **SKIP**, and that is the result worth
+recording: the home screen only produced a new frame in 3 of 16 seconds (plain)
+and 1 of 16 (graded), so `lat_med` was computed over a handful of frames and
+`lat_max` of 1078 ms describes "nothing happened for a second", not a slow
+pipeline. The harness used to `PASS` as soon as a summary line existed, which is
+the same "a log line proves code ran, not that the outcome happened" mistake
+recorded in §5.1r. It now requires a quarter of the window to have reported
+frames and says why when it does not. `tools/device_latency_probe.sh` already
+carried that judgement (`scene=live` vs `scene=static`, decided from the median
+bitrate), so the two harnesses now agree.
+
+`tools/device_latency_probe.sh` on the Motorola, screen awake on the launcher:
+
+```
+RESULT h264/baseline src=720x1520 scene=live   fps_med=9.6 v_kbps_med=248
+RESULT h264/lowlat   src=720x1520 scene=static fps_med=9.7 v_kbps_med=59
+RESULT h265/baseline src=720x1520 scene=live   fps_med=9.9 v_kbps_med=180
+RESULT h265/lowlat   src=720x1520 scene=live   fps_med=8.8 v_kbps_med=194
+```
+
+What this does and does not prove: h264 **and** h265 both encode on a second,
+much weaker SoC at native panel size, and the fork works unchanged across
+vendors. It does not prove a frame rate: a static launcher is content-change
+limited, so ~10 fps here is the screen's fault, not the pipeline's, and no fps
+claim is made from it. For a rate that means something the device has to be
+showing motion -- the tablet measurements in §5.1n and §5.1w were taken that way
+(`fps_med=60.0`).
+
+### 5.1aa Defect #21: AV1 was assumed, and a second vendor proved it cannot be
+
+Gate section 11 (the launcher driving a real device) went red the moment the
+Lenovo was swapped for the Motorola -- and it stayed red for a reason worth
+writing down. The symptoms were misleading: `Get-Process scrcpy` found a child,
+its window title was empty, and its command line read back empty, which looks
+like "the launcher never passed `--serial`". It had. Reading the launcher's own
+run-log panel through UI Automation showed the real sequence:
+
+```
+[02:45:46] no AV1 encoder on SDK 28: switched to h264 so the session can start
+[02:45:46] launching: --serial=<dev-id-2> --video-codec=h264 ...
+[02:45:47] [server] INFO: Device: [motorola] motorola moto g(7) power (Android 9)
+[02:45:47] ! [server] WARN: Audio disabled: it is not supported before Android 11
+[02:45:48] INFO: Texture (D3D11VA): 720x1520
+```
+
+Before the fix the same line was `--video-codec=av1`, and the session died
+during codec configuration with `Demuxer 'video': stream disabled due to
+connection error`, leaving a scrcpy process that had already exited -- which is
+why both the title and the command line came back empty. The empty `cmdline=`
+was not the bug, it was the corpse.
+
+The real defect: **the seeded profiles are device-capability assumptions.** The
+default profile asks for AV1, which the tablet's SM8550 encodes (and which
+§5.1l already showed logs a `java.lang.IllegalArgumentException` per session
+even there), and which a 2019 mid-range Motorola simply does not have. On a
+device without it, "Mirror" opens no window and says nothing -- the error is in
+the log panel, below the fold, of an app that looks like it is still starting.
+
+Fix, in `launcher/MainWindow.xaml.cs`:
+
+* detection now also reads `ro.build.version.sdk` (read-only `getprop`, the same
+  pattern already used for the model) and stores it on the device record;
+* a session that asks for `av1` on a device below API 29 is downgraded to
+  `h264` before the arguments are built, and the run log says so in both
+  languages (`LogAv1Fallback`), so the downgrade is visible rather than magic;
+* replacing the combo item to show the model **drops the WPF selection**, which
+  turned the first attempt into "no device selected" -- the selection is now
+  re-asserted, and that is why the intermediate test run found no child at all.
+
+Honest limits of this fix: SDK 29 is the floor scrcpy's own server documents for
+AV1 packaging, not a per-device guarantee -- an Android 10 device can still lack
+an AV1 *encoder*, and the only infallible probe is `dumpsys media.codec`, which
+is a much bigger parse. The downgrade removes the silent-nothing failure, not
+every possible codec mismatch. Verified: section 11 now reports
+`args=--serial=<dev-id-2> present`, `title='4K Ultra Quality Stream 60FPS'` and
+a clean stop on the Motorola.
+
+### 5.1ab Gate section 11 blamed the launcher again, but this time the phone was at fault
+
+Section 11 went red on the Motorola a second time, with the same misleading
+symptoms as #21: a `scrcpy` child existed, its window title was empty, its
+command line read back empty. That combination is now recognised as **a corpse,
+not a missing argument**: the child had already exited, so `MainWindowTitle` and
+`Win32_Process.CommandLine` both legitimately return nothing.
+
+Reading the launcher's log panel through UI Automation on the failure gave the
+actual cause, which is on the device:
+
+```
+! at android.media.MediaCodec.native_setup(Native Method)
+! at android.media.MediaCodec.<init>(MediaCodec.java:1811)
+! at android.media.MediaCodec.createEncoderByType(MediaCodec.java:1777)
+! at com.genymobile.scrcpy.video.SurfaceEncoder.createMediaCodec(SurfaceEncoder.java:301)
+! Killed
+scrcpy exited with code 2
+```
+
+Measured, not assumed (`out/gate_motorola_fix.log`, the repetitions and
+`out/pkgctl_control.txt`):
+
+| What was run | Result |
+|---|---|
+| 6 back-to-back `tools/launcher_device_test.ps1` on the moto g(7) power | 5 failed with the `createMediaCodec` stack above, 1 passed |
+| Same command line through the CLI: `--max-fps=30 --video-bit-rate=8M` | session started, no encoder error |
+| Same through the CLI: `--max-fps=60 --video-bit-rate=50M` (the failing profile's numbers) | session started, no encoder error |
+| `launcher_device_test.ps1` after 75 s with no session on the phone | passed |
+| 3 more runs with the retry in place | 3 passed, 2 of them only after `RETRY 1 of 3` |
+| The same profile on the Lenovo (Android 14) all session | never produced this stack |
+
+So the config is not too ambitious for this phone and the launcher is not
+dropping arguments: the Android 9 / Qualcomm codec occasionally refuses a *new*
+encoder while the previous session's is still being released, and scrcpy dies
+before it can create a window. Rapid start-stop loops are what provoke it --
+exactly what a test harness does.
+
+Fixes to `tools/launcher_device_test.ps1` (the product needed none):
+
+* The poll now records every `scrcpy` pid it has seen and which of them are
+  still alive, so "started and died" and "never started" are different, stated
+  outcomes; the serial assertion no longer runs against a corpse.
+* On failure it dumps the launcher's `launching:` line and the last 22 log
+  lines, because the launcher mirrors scrcpy's stdout -- that dump is what
+  turned a two-hour hunt into one read.
+* The `--serial` check accepts the launcher's own `launching:` record when the
+  live command line loses the race, and still fails when neither carries it.
+* Up to 3 attempts with a 15 s settle between them, each printed as
+  `RETRY n of 3`, so a device-side refusal costs a retry while a packaging
+  failure costs three identical failures and still reports FAIL.
+* The packaged-`adb` serial read is guarded: a copy of the package without
+  `AdbWinApi.dll` produced no device line, and calling `ToString()` on that
+  null killed the script with a PowerShell error instead of a clean FAIL.
+
+**Positive control, because a retry that cannot fail is worthless**: the harness
+was run against a copy of the package containing the launcher and a working
+`adb` but **no `scrcpy` directory** -- `out/pkgctl_control.txt` shows
+`control_exit=1`, `FAIL mirror never showed a window (3 attempts; scrcpy pids
+seen: )`, i.e. it exhausted the retries and distinguished "no process ever
+started" (empty pid list) from the phone's "process started and died". What this
+does *not* establish: the mechanism inside the phone. `dumpsys media.codec` was
+not parsed, and this is one Android 9 unit, not a proof about all of them. If a
+user hits it, the practical workaround is to let the phone sit for a few seconds
+between sessions or lower fps/bitrate; the launcher itself already reports the
+device's error in its log instead of hiding it.
+
 ### 5.2 CLI
 
 * `scrcpy.exe --version` and `--help` work from the packaged directory with a
@@ -1635,6 +1794,16 @@ instead of hiding it: §8b retries once when the harness presents zero frames
 passing (§5.1g and §5.1h list those). Treat a remaining failure in §6/§7/§8 as
 "re-run when nothing else is running", not as a code regression — the exit code
 is still the gate.
+
+The block above is quoted from the run that shaped sections 6-8, and the suite has
+grown since: the last two full device runs both finished at **137 passed,
+0 failed** -- one with the Lenovo TB-9707F (§5.1y), one with the moto g(7) power
+(`out/gate_motorola_final.log`, §5.1ab). In the Motorola run nothing was rescued
+by a retry either: `grep -ic retry` over that log returns **0**, so 137/0 there is
+a first-attempt sweep with the new device-codec settle in section 11 unused.
+Sections 11 and 12 are the only ones that change with the phone: they are what a
+deviceless machine SKIPs, and they are the reason `137` is not treated as a fixed
+contract.
 
 Writing it found these shipped launcher bugs, all now fixed:
 

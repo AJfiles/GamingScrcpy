@@ -266,6 +266,11 @@ namespace GamingScrcpyLauncher
             new[] { "LogScanning", "escaneando dispositivos adb", "scanning adb devices" },
             new[] { "LogDetected", "detectado: {0} estado={1}", "detected: {0} state={1}" },
             new[] { "LogDeviceModel", "modelo del dispositivo: {0}", "device model: {0}" },
+            new[] { "LogAv1Fallback",
+                    "AV1 no existe en SDK {0}: se ha cambiado a h264 para que "
+                    + "la sesi\u00f3n arranque",
+                    "no AV1 encoder on SDK {0}: switched to h264 so the session "
+                    + "can start" },
             new[] { "LogNoDevice",
                     "no se detect\u00f3 ning\u00fan dispositivo adb "
                     + "(conecta por USB o empareja por Wi-Fi)",

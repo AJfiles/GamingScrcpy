@@ -32,6 +32,22 @@ function Press($win, $id) {
     return $true
 }
 
+# The launcher mirrors scrcpy's own stdout into its log panel, so the log holds
+# both the argument line it launched with and the client's ERROR lines. Without
+# it a failed mirror attempt can only say "no serial", which blames the launcher
+# for a session that died on the device.
+function Get-Log($win) {
+    $el = ById $win 'TxtLog'
+    if (-not $el) { return '' }
+    $t = $el.Current.Name
+    if ([string]::IsNullOrWhiteSpace($t)) {
+        try { $t = $el.GetCurrentPattern(
+            [System.Windows.Automation.ValuePattern]::Pattern).Current.Value }
+        catch { $t = '' }
+    }
+    return $t
+}
+
 $proc = Start-Process -FilePath $exe -PassThru
 $fail = 0
 
@@ -60,8 +76,13 @@ try {
     $adb = Join-Path $root 'dist\GamingScrcpy\launcher\adb.exe'
     $serial = ''
     if (Test-Path $adb) {
-        $serial = ((& $adb devices) | Select-String '\sdevice$' |
-                   Select-Object -First 1).ToString().Split()[0]
+        # guarded: a packaged adb that cannot talk to its server (missing
+        # AdbWin*.dll, busy tunnel) prints no device line, and calling
+        # ToString() on that null used to kill the whole script with a
+        # PowerShell error instead of reporting a clean FAIL
+        $line = @(& $adb devices 2>&1) | Select-String '\sdevice$' |
+            Select-Object -First 1
+        if ($line) { $serial = $line.ToString().Split()[0] }
     }
     if ($badge -notmatch '[1-9]' -or -not $serial) {
         Write-Output "RESULT detect badge='$badge' adbSerial='$serial'"
@@ -74,50 +95,97 @@ try {
     # Mirror: the launcher must spawn its own scrcpy.exe and that process must
     # reach a live window (i.e. the server was found and the session started)
     $before = @(Get-Process scrcpy -ErrorAction SilentlyContinue | ForEach-Object Id)
-    if (-not (Press $win 'BtnMirror')) {
-        Write-Output 'FAIL BtnMirror not found'
-        $fail = 1
-    } else {
-        $child = $null
+    $child = $null
+    $seen = @()
+    $log = ''
+    $launch = ''
+    # Three tries, not one. On this Android 9 phone a fresh MediaCodec is refused
+    # while the previous session's encoder is still being released, so scrcpy
+    # dies before it creates a window: 5 of 6 back-to-back launcher sessions
+    # ended in SurfaceEncoder.createMediaCodec, while the identical command line
+    # started fine 75 s later and the same profile mirrors normally on Android 14.
+    # That is the device, not the package, so the retry prints a RETRY line per
+    # attempt and the FAIL below still fires when every attempt dies -- which is
+    # what a missing scrcpy-server or a bad argument list does, with no
+    # MediaCodec stack in the log.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        if (-not (Press $win 'BtnMirror')) {
+            Write-Output 'FAIL BtnMirror not found'
+            $fail = 1
+            break
+        }
         $end = (Get-Date).AddSeconds(35)
         while ((Get-Date) -lt $end) {
             $new = @(Get-Process scrcpy -ErrorAction SilentlyContinue |
                      Where-Object { $before -notcontains $_.Id })
-            if ($new.Count -gt 0) {
-                $child = Get-Process -Id $new[0].Id
-                if ($child.MainWindowTitle -ne '') { break }
+            foreach ($n in $new) {
+                if ($seen -notcontains $n.Id) { $seen += $n.Id }
+                if ($n.MainWindowTitle -ne '') { $child = $n }
             }
+            if ($child) { break }
             Start-Sleep -Milliseconds 300
         }
-        if (-not $child) {
-            Write-Output 'FAIL mirror did not start scrcpy from the package'
+        if ($child) { break }
+        $log = Get-Log $win
+        $launch = ($log -split "`r?`n" | Select-String 'launching:' |
+                  Select-Object -Last 1)
+        [void](Press $win 'BtnStop')
+        if ($attempt -lt 3) {
+            Write-Output "RETRY $attempt of 3: no scrcpy window in 35 s, settling 15 s"
+            Start-Sleep -Seconds 15
+        }
+    }
+    if (-not $child -and $fail -eq 0) {
+        # the corpse used to be reported as "started without the serial", which
+        # blamed the launcher for a session the device refused
+        $died = @($seen | Where-Object {
+                     -not (Get-Process -Id $_ -ErrorAction SilentlyContinue) })
+        Write-Output ("FAIL mirror never showed a window (3 attempts; scrcpy pids " +
+                      "seen: $($seen -join ','); exited before one appeared: " +
+                      "$($died -join ','))")
+        Write-Output "       launcher launched: ${launch:-'(no launching line)'}"
+        (($log -split "`r?`n") | Select-Object -Last 22) |
+            ForEach-Object { Write-Output "       log | $_" }
+        $fail = 1
+    }
+    if ($child) {
+        $cl = (Get-CimInstance Win32_Process -Filter "ProcessId=$($child.Id)").CommandLine
+        Write-Output "RESULT mirror pid=$($child.Id) title='$($child.MainWindowTitle)'"
+        # the selected device must be the one the launcher started scrcpy
+        # against, otherwise a second phone on the hub would be mirrored. The
+        # live cmdline is the evidence; the launcher's own launching line covers
+        # the race where this child exits while WMI queries it. Both without the
+        # serial means it really was dropped.
+        $hasSerial = $cl -match [regex]::Escape("--serial=$serial")
+        if (-not $hasSerial -and -not $launch) {
+            $launch = (Get-Log $win) -split "`r?`n" |
+                Select-String 'launching:' | Select-Object -Last 1
+        }
+        if (-not $hasSerial) {
+            $hasSerial = "$launch" -match [regex]::Escape("--serial=$serial")
+        }
+        if ($serial -and -not $hasSerial) {
+            Write-Output "RESULT args=--serial missing (expected $serial)"
+            Write-Output "       cmdline=$cl"
+            Write-Output "       launching line: ${launch:-'(none)'}"
+            Write-Output 'FAIL scrcpy was started without the detected serial'
             $fail = 1
         } else {
-            $cl = (Get-CimInstance Win32_Process -Filter "ProcessId=$($child.Id)").CommandLine
-            Write-Output "RESULT mirror pid=$($child.Id) title='$($child.MainWindowTitle)'"
-            # the selected device must be the one the launcher started scrcpy
-            # against, otherwise a second phone on the hub would be mirrored
-            if ($serial -and $cl -notmatch [regex]::Escape("--serial=$serial")) {
-                Write-Output "RESULT args=--serial missing (expected $serial)"
-                Write-Output 'FAIL scrcpy was started without the detected serial'
-                $fail = 1
-            } else {
-                Write-Output "RESULT args=--serial=$serial present"
-            }
+            Write-Output "RESULT args=--serial=$serial present"
+        }
 
-            # Stop: the same button path a user presses at the end of a session
-            [void](Press $win 'BtnStop')
-            $end = (Get-Date).AddSeconds(20)
-            $gone = $false
-            while ((Get-Date) -lt $end) {
-                if (-not (Get-Process -Id $child.Id -ErrorAction SilentlyContinue)) { $gone = $true; break }
-                Start-Sleep -Milliseconds 300
-            }
-            if ($gone) { Write-Output 'RESULT stop scrcpy exited cleanly' }
-            else {
-                Write-Output 'FAIL Stop did not end the mirror'
-                $fail = 1
-            }
+        # Stop: the same button path a user presses at the end of a session
+        [void](Press $win 'BtnStop')
+        $end = (Get-Date).AddSeconds(20)
+        $gone = $false
+        while ((Get-Date) -lt $end) {
+            if (-not (Get-Process -Id $child.Id -ErrorAction SilentlyContinue)) { $gone = $true; break }
+            Start-Sleep -Milliseconds 300
+        }
+        if ($gone) { Write-Output 'RESULT stop scrcpy exited cleanly' }
+        else {
+            Write-Output 'FAIL Stop did not end the mirror'
+            $fail = 1
         }
     }
 } finally {

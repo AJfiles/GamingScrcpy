@@ -4,7 +4,11 @@ using System.Text.Json;
 
 namespace GamingScrcpyLauncher;
 
-public sealed record AndroidDevice(string Serial, string Model, string State, bool IsWireless)
+// Sdk is ro.build.version.sdk (0 = not read yet). The launcher needs it because
+// two of the things a profile can ask for simply do not exist on older
+// Androids: an AV1 encoder, and any audio at all before API 30.
+public sealed record AndroidDevice(string Serial, string Model, string State, bool IsWireless,
+                                   int Sdk = 0)
 {
     public string Display =>
         $"{(IsWireless ? "WiFi " : "USB  ")}{Serial}" +
