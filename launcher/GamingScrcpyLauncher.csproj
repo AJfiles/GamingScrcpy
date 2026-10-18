@@ -9,6 +9,8 @@
     <AssemblyName>GamingScrcpyLauncher</AssemblyName>
     <RootNamespace>GamingScrcpyLauncher</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- rendered and packed by tools/make_app_icon.ps1 (16..256 px, one file) -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Version>1.0.0</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
