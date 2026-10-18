@@ -238,6 +238,9 @@ public partial class MainWindow : Window
         c.Contrast = (int) Math.Round(SldContrast.Value);
         c.Brightness = (int) Math.Round(SldBright.Value);
         c.Gamma = (int) Math.Round(SldGamma.Value);
+        c.FilterOverlay = ChkFilterOverlay.IsChecked == true;
+        c.OverlayHotkey = TxtOverlayHotkey.Text.Trim();
+        c.OverlayVisible = ChkOverlayVisible.IsChecked == true;
 
         c.KeyboardMode = CbValue(CboKeyboard, "auto", "sdk", "uhid", "aoa", "disabled");
         c.MouseMode = CbValue(CboMouse, "auto", "sdk", "uhid", "aoa", "disabled");
@@ -308,6 +311,10 @@ public partial class MainWindow : Window
         ChkFxContrast.IsChecked = c.FxContrast;
         ChkFxBright.IsChecked = c.FxBright;
         ChkFxGamma.IsChecked = c.FxGamma;
+        ChkFilterOverlay.IsChecked = c.FilterOverlay;
+        ChkOverlayVisible.IsChecked = c.OverlayVisible;
+        TxtOverlayHotkey.Text = string.IsNullOrWhiteSpace(c.OverlayHotkey)
+                                ? "super+alt+f" : c.OverlayHotkey;
 
         TxtRecordPath.Text = c.RecordPath;
         TxtFrameBridge.Text = c.FrameBridge;
@@ -365,6 +372,8 @@ public partial class MainWindow : Window
             ? Loc.T("NoteAv1")
             : Cb(CboVideoCodec).Contains("hevc", StringComparison.OrdinalIgnoreCase)
                 ? Loc.T("NoteHevc") : Loc.T("NoteDeviceHw");
+        LblOverlayHotkeyBad.Visibility = AppConfig.NormalizeOverlayHotkey(TxtOverlayHotkey.Text) != null
+            ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void UpdateCommandPreview()
@@ -814,6 +823,9 @@ public partial class MainWindow : Window
         }
         var cfg = Collect();
         cfg.Name = name.Trim();
+        // the panel keeps its grades in one file; the session carries the same
+        // lines so loading it back restores what the user saved (v3 §5.4)
+        cfg.FilterProfiles = ProfileStore.HarvestFilterProfiles();
         ProfileStore.SaveProfile(cfg);
         RefreshProfiles(name.Trim() + ".json");
         Log(Loc.Format("LogProfileSaved", cfg.Name));
@@ -909,6 +921,19 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------
     // misc UI
     // ------------------------------------------------------------------
+
+    // The panel hotkey is the only key combination typed as free text: a combo
+    // the client cannot register would leave the panel answering only to Esc,
+    // so the box warns while the user is still typing it.
+    private void OnOverlayHotkeyChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppress)
+        {
+            return;
+        }
+        RefreshLabels();
+        UpdateCommandPreview();
+    }
 
     private void OnSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

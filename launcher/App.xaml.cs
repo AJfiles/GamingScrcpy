@@ -141,6 +141,7 @@ public partial class App : Application
             FxSharp = true, FxNight = true, FxSat = true,
             Sharpness = 100, NightBoost = 100, Saturation = 200,
             TouchVisualizer = true,
+            OverlayHotkey = "ctrl+shift+f9", OverlayVisible = true,
             KeyboardMode = "uhid", MouseMode = "uhid", GamepadMode = "aoa",
             MouseBindings = "nbsh", ShortcutMods = "lctrl,lalt,lsuper",
             Record = true, Container = "mp4", RecordPath = "max.mp4",
@@ -149,6 +150,28 @@ public partial class App : Application
             AudioPcm = @"\\.\pipe\gaming-pcm", PcmMutePlayback = true,
             TurnScreenOff = true,
         });
+        // A combo the client cannot register would leave the filter panel
+        // answering only to Esc, so an invalid one must never reach the command
+        // line: the launcher drops the token and the client default stays live.
+        var typo = new AppConfig { Name = "hotkey typo", OverlayHotkey = "super+alt+hyper" }
+            .BuildArguments("TESTSERIAL");
+        var typoSent = false;
+        foreach (var a in typo)
+        {
+            if (a.StartsWith("--game-overlay-hotkey", StringComparison.Ordinal))
+            {
+                typoSent = true;
+            }
+        }
+        if (typoSent)
+        {
+            Console.WriteLine("FAIL an invalid overlay hotkey was sent");
+            ++failures;
+        }
+        else
+        {
+            Console.WriteLine("PASS invalid overlay hotkey dropped");
+        }
         Console.WriteLine(failures == 0
             ? "ALL PROFILES VALID" : $"{failures} PROFILE(S) INVALID");
         Environment.ExitCode = failures == 0 ? 0 : 1;

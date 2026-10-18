@@ -42,6 +42,11 @@ public static class Shortcuts
         new("ScCatMirror", "MOD+Up / Down", "ScActVolume", "ScDescVolume"),
         new("ScCatMirror", "MOD+P", "ScActPower", "ScDescPower"),
 
+        // Filters: the real-time panel is this fork's own global hotkey
+        // (app/src/overlay.c), configurable in the Filters tab.
+        new("ScCatFilters", "Super+Alt+F", "ScActFilterPanel", "ScDescFilterPanel"),
+        new("ScCatFilters", "Esc", "ScActClosePanel", "ScDescClosePanel"),
+
         // Window
         new("ScCatWindow", "Super/Alt+F2", "ScActBorderless", "ScDescBorderless"),
         new("ScCatWindow", "Super/Alt+F5", "ScActOnTop", "ScDescOnTop"),
@@ -62,9 +67,9 @@ public static class Shortcuts
         new("ScCatOther", "MOD+N", "ScActNotifications", "ScDescNotifications"),
     };
 
-    // Categories with no rows are not shown: scrcpy 5 has no recording or
-    // filter hotkey, and the alternative was to print a key that does nothing,
-    // which is the exact failure mode v3 §1.2 forbids for audio.
+    // Categories with no rows are not shown: scrcpy 5 has no recording hotkey,
+    // and the alternative was to print a key that does nothing, which is the
+    // exact failure mode v3 §1.2 forbids for audio.
     public static IEnumerable<string> ShownCategories(IEnumerable<ShortcutRow> rows) =>
         from cat in Categories
         where rows.Any(r => r.Category == cat)

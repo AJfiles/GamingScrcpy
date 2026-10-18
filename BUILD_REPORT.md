@@ -18,7 +18,7 @@ something could not be measured, it says so.
 | Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,201,480 bytes (rebuilt for the v3 §3 shortcut table in §5.1al and again for the §4 theme pass in §5.1am, the byte size unchanged), window verified on screen, the shortcut panel read back through UI Automation in both languages, and the theme audited by section 20 |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (19 scripts + `fixtures\` + `theme\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh`, `bash tools/fx_pixel_test.sh` and `bash tools/theme_audit.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` (or its inputs under `tools\theme\`) when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,357,530 bytes measured on the archive built from this tree, 126,357,592 on the one repacked after that measurement — ≈120.5 MiB either way, and the copy of this report inside the archive can only ever carry the figure from the previous repack, because the report is inside its own archive; `Expand-Archive` into an empty directory yields **145 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\`, `tools\theme\`), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138, then 140; every one of those is superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (19 scripts + `fixtures\` + `theme\`), so a user can re-run the pixel assertions, the filter checks, the latency matrix and the theme audit without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/render_driver_test.sh 20` (`OK`, `direct3d11 presented=20/20`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `bash tools/theme_audit.sh` (`THEME OK pairs=15`) with its broken-palette fixture failing as required (`THEME FAIL issues=4`, exit 1), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=27 categories=3`) with its duplicate-key fixture — `--validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"` — failing as required (`SHORTCUTS FAIL issues=2`, exit 1), and `powershell tools/shortcuts_table_test.ps1` (`SHORTCUT-TABLE OK`, 27 rows in each language) — that last one finds its launcher one level up, because an extracted package has no build tree |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,403,344 bytes on the archive rebuilt for PR-6 (the two earlier repacks measured 126,357,530 and 126,357,592) — ≈120.5 MiB either way, and the copy of this report inside the archive can only ever carry the figure from the previous repack, because the report is inside its own archive; `Expand-Archive` into an empty directory yields **148 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\`, `tools\theme\`), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138, then 140, then 145; every one of those is superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (22 files + `fixtures\` + `theme\`), so a user can re-run the pixel assertions, the filter checks, the latency matrix and the theme audit without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `bash tools/overlay_test.sh` (`OVERLAY OK`, paired Δmedian -0.004 ms, Δp99 +0.312 ms), `powershell tools/launcher_uiauto.ps1` (`UIAUTO OK`, every tab walked and its controls found by automation id), `powershell tools/launcher_tab_shot.ps1 -Tab 0` (window captured), `bash tools/theme_audit.sh` (`THEME OK pairs=15`) with its broken-palette fixture failing as required (`THEME FAIL issues=4`, exit 1), `launcher\GamingScrcpyLauncher.exe --validate-profiles` (`ALL PROFILES VALID`, `PASS invalid overlay hotkey dropped`), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=29 categories=4`) with its duplicate-key fixture — `--validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"` — failing as required (`SHORTCUTS FAIL issues=2`, exit 1). The render-driver sweep and `tools/shortcuts_table_test.ps1` travel in `tools\` but were last executed from the build tree by gate sections 6 and 17, not from this extraction |
 | Regression suite | `tools\verify_all.sh` | **151 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr5.log` — 145 of those lines were already green at §5.1al and the 6 new ones are section 20, the theme audit: single accent, radius range, no symbol glyphs, a keyboard-focus trigger in the templates, 15 measured contrast pairs and its broken-palette positive control; §5.1am); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
@@ -2321,7 +2321,14 @@ rendered window can say whether it still fits.
 
 The tour itself is seven files, `out\shots\v4_tab_1_quick.png` through
 `v4_tab_7_advanced.png`, taken from the packaged launcher by selecting each
-`TabItem` through UI Automation and capturing the window rectangle.
+`TabItem` through UI Automation and capturing the window rectangle. PR-6 added
+the *Real-time filter panel* block to the end of the Filters tab, so that one
+shot no longer showed what the tab contains: `tools/launcher_tab_shot.ps1` now
+does the selecting and capturing (tab index, not header text — the headers are
+localized), and `out\shots\v5_tab_4_filters.png` replaces
+`v4_tab_4_filters.png`. It shows the whole tab in one frame: presets, six
+sliders, and the new block with its hotkey box reading `super+alt+f` while the
+COMMAND column carries `--game-filter-overlay --game-filter-profiles=…`.
 
 **Gate.** `bash tools/verify_all.sh` with the moto g(7) power attached: **151
 passed, 0 failed** (`out\gate_v3_pr5.log`), the 145 of §5.1al plus the six lines
@@ -2360,7 +2367,249 @@ it — the inputs-missing guard and the fallback, neither of which is reached wh
 the build tree rather than repeating the whole suite; the next full run is the one
 that carries gate §18.
 
-## 6. What could NOT be validated here, and why
+**§4.2 re-audited in PR 6, because PR 5 never said so explicitly.** Counted from
+the XAML rather than from the screenshots: the Quick tab holds **six** input
+controls and they are all buttons — `BtnMirror`, `BtnMirrorRecord`,
+`BtnRecordOnly`, `BtnStop`, the `BtnShortcuts` chip and the *Rescan ADB* button
+in the device panel. Everything else on that tab is read-only: 20 `TextBlock`s
+(device model, battery, temperature, latency, fps, video/audio bitrate) plus the
+sparkline. No codec, buffer, renderer or filter control is on it — device
+selection lives in the header, session profiles in the *Avanzado* tab — so the
+brief's "4-6 primary controls" is met at the top of its range, with four of the
+six being the actions it names. Two further points of the same sub-clause: the
+shortcut table (`ScPanel`) is `Visibility="Collapsed"` until the chip asks for it,
+and the advanced surface is a tab that is not selected at startup rather than a
+block inside Quick. One deviation worth recording: `App.xaml:228` styles
+`Expander`, but `MainWindow.xaml` contains no `<Expander>` element — the styling
+is unused, kept for a future per-section collapse, and the requirement is met by
+the tab grouping instead.
+
+### 5.1an PR 6 — the real-time filter panel, and the four defects running it found
+
+The brief's headline feature (§5): open the colour grade over the mirror with one
+key, move six sliders while the game runs, save and reload named grades, and pay
+nothing for it in latency. The design constraint that shaped everything is §5.2:
+the panel is **its own SDL window** and only writes the parameters of the
+`--game-postfx` engine that already exists, so the mirrored frame never gains a
+pass. `app/src/overlay.c` is the whole feature (panel painting, mouse and keyboard
+handling, the Win32 hotkey thread, the profile file), and the client grew five
+options — `--game-filter-overlay`, `--game-overlay-visible`,
+`--game-overlay-hotkey=`, `--game-filter-profiles=`, `--game-overlay-english`
+(documented in README §3, shortcuts in §5, cost in §6, manual checks in §7 item 15).
+
+**How each §5.2 requirement is met.** (a) A separate borderless
+`SDL_WINDOW_ALWAYS_ON_TOP` window, never drawn into the fork's scene. (b) The
+sliders call `sc_gaming_set_postfx_grade()`, which only writes `g->params` and
+invalidates the in-memory LUT — no new pass, no GPU re-upload, no new context.
+(c) No vsync on the panel and a `dirty` flag: it repaints on interaction only, so
+its idle tick is a parameter read plus a compare. (d) One persistent software
+renderer created in `sc_gaming_overlay_create()` and reused; nothing per frame.
+
+**Four defects, all found by running it rather than reading it.**
+
+1. **A log line that promised code that did not exist.** When `RegisterHotKey`
+   failed with error 1409 (another program owns the combo) the code warned *"the
+   panel still opens while the mirror has focus"* — but nothing implemented that:
+   the registered system hotkey was the only path. Either the sentence or the
+   behaviour had to change; the behaviour did.
+   `sc_gaming_overlay_want_local_hotkey()` now answers for the mirror window's own
+   key events when the global registration is unavailable,
+   `sc_screen_handle_event()` consumes the combo so it never reaches the game, and
+   `gamingdemo` asserts the whole thing: it injects a synthetic `Super+Alt+F` and
+   an `Super+Alt+Shift+F`, requires `reachable=yes` and `extra-mod-rejected=yes`,
+   and fails the run if the panel is neither globally live nor locally reachable
+   nor already visible. The taken-hotkey branch is not hypothetical — it is what
+   this host printed while a wedged demo process still held `SUPER+ALT+F`
+   (`out/ov/smoke.log`: `global hotkey 'SUPER+ALT+F' is taken (error 1409)`, then
+   `global=taken local-match=yes`).
+2. **§5.4 silently broken: the stored grade was never read.** The loader compared
+   `sscanf(line, "current %u %u %u %u %u %u", …) == 7`, and six conversions never
+   return 7. The panel therefore started every session from the command line and,
+   worse, an untouched reader session overwrote `current` with that CLI grade — the
+   exact "control that quietly does nothing" this directive forbids in §1.2. Fixed
+   to `== 6`, and the gate asserts the round trip: a writer session stores
+   `current 85 85 85 85 0 0`, a second session that only reads the file starts with
+   the engine at those numbers (`overlay->engine postfx=60 contrast=85 …`), and a
+   session that touches nothing leaves the file byte-identical (`changed` gates the
+   save).
+3. **A button outside its own window.** The action row used a fixed 160 px per
+   button; three of them plus gaps exceeded the 496 px panel and `CANCELAR` was
+   painted past the edge — visible in the first live screenshot. `BTN_W` is now
+   derived from the grid with two `_Static_assert`s so the row cannot overflow
+   again, and the gate checks the panel's own pixels by size: the snapshot BMP must
+   be exactly `496*400*3+54 = 595254` bytes.
+4. **Panel clicks leaked into the mirror's input path.** A click inside the panel
+   is a mouse event on a window that is not the mirror, and SDL event watches see
+   every window's events — the return value of `SDL_AddEventWatch` is ignored, so
+   returning `true` there does nothing. The touch visualizer lit phantom dots on
+   panel drags. Fixed on both sides: `sc_screen_handle_event()` ignores foreign
+   windows, and `gaming_event_watch()` in `app/src/gaming.c` drops pointer traffic
+   that belongs to the panel.
+
+**Latency, measured (§5.3).** `tools/overlay_test.sh` is gate section 18. Same
+grade, same 720x1280 frames, 1000 frames per arm, the panel open with a show/hide
+toggle every 150 frames in the second arm (`out/ov/v3_pr6_overlay.log`):
+
+| arm | median | p90 | p99 | max | fps presented |
+|---|---|---|---|---|---|
+| no panel | 3.273 ms | 3.811 ms | 5.466 ms | 52.961 ms | 63.2 |
+| panel open + toggles | 3.277 ms | 3.892 ms | 5.472 ms | 17.764 ms | 64.0 |
+
+|Δmedian| = **0.004 ms** against a 1 ms budget, |Δp99| = 0.006 ms, fps 63.2 → 64.0
+(the criterion is "no drop over 3"). The max column is the tell that the tail is
+not the panel: 52.961 ms in the arm **without** it versus 17.764 ms with it.
+
+**The first full-gate run of this section failed, and the failure was the
+instrument, not the feature.** `out\gate_v3_pr6.log` reports **178 passed / 2
+failed**: the median criterion held and `FAIL p99 moved 1.780 ms with the panel
+open` did not — on the same binary that had measured 0.006 ms standalone minutes
+earlier. The reason showed up in a 250-frame diagnostic pair taken straight
+after: the *same* arm produced p99 4.855 ms in one rep and 9.347 ms in the next,
+because the p99 of a CPU-bound pass on a desktop that is also streaming a phone
+over USB is mostly somebody else's scheduling. A single-run p99 comparison is
+therefore a weak instrument for this question, and a gate that flips on it is
+noise rather than evidence.
+
+The first fix strengthened the instrument by repeating each arm, but the way the
+repeats were combined was itself wrong, and the extracted package is what proved
+it. Comparing each arm's *quietest* rep against the other arm's quietest rep is
+not a comparison of two runs that happened at the same moment: the packaged
+re-run printed `FAIL p99 moved 1.812 ms with the panel open` from a baseline rep
+of 7.462 ms and a panel rep of 5.650 ms — the panel measured the *shorter* tail,
+which is a result the code cannot produce, since nothing in a parameter editor
+can make the mirror's pass faster. The section now pairs the arms by rep
+(`base$r` then `over$r`, back to back), prints every pair as a `NOTE`, and judges
+the mean of those paired differences. The median keeps the directive's symmetric
+budget because it is a stable statistic here (four reps spanned 3.244–3.284 ms);
+the tail is judged one-sided — only a *longer* p99 fails, a shorter one is noise
+and is printed with its sign. `--med-budget` and `--p99-budget` exist so both
+FAIL branches can be driven on real numbers rather than assumed, and both were:
+`FAIL p99 grew 5.672 ms with the panel open (budget -0.5 ms)` and
+`FAIL median moved -0.148 ms with the panel open (budget 0.001 ms)`, each with
+`OVERLAY FAIL issues=…` and exit 1.
+
+**The final run: 179 passed / 0 failed, exit 0** (`out\gate_v3_pr6c.log`, section 18
+verbatim):
+
+```
+note  base1.log: frames=1000 samples=1000 med=3.274ms p90=3.976ms p99=5.966ms max=29.781ms avg=3.475ms
+note  over1.log: frames=1000 samples=1000 med=3.270ms p90=4.042ms p99=5.751ms max=32.370ms avg=3.436ms
+note  base2.log: frames=1000 samples=1000 med=3.323ms p90=3.931ms p99=6.787ms max=55.550ms avg=3.555ms
+note  over2.log: frames=1000 samples=1000 med=3.266ms p90=3.942ms p99=7.149ms max=145.868ms avg=3.657ms
+note  rep 1 pair: median -0.004 ms, p99 -0.215 ms (panel minus baseline)
+note  rep 2 pair: median -0.057 ms, p99 0.362 ms (panel minus baseline)
+note  mean of 2 paired reps: median -0.030 ms, p99 0.073 ms
+PASS  paired median difference = -0.030 ms, |x| < 1.0 ms
+PASS  paired p99 difference = 0.073 ms < 1.0 ms (only a longer tail fails)
+PASS  presented fps with the panel open: 63.3 against 63.5 baseline (drop <= 3)
+PASS  show/hide left the grade untouched (the A/B compares the same pixels)
+```
+
+Pairing is what makes those numbers readable: rep 1's two runs were 1.5 s apart
+and differ by -0.004 ms of median, while rep 2's tail moved +0.362 ms under the
+panel and -0.057 ms of median — the same shape a quiet standalone A/B produces
+(Δmed 0.004 ms, Δp99 0.006 ms in `out/ov/v3_pr6_overlay.log`). The four medians
+span 3.266–3.323 ms, so the 1 ms median budget has ~30x of slack, and the max
+column still shows where the tail comes from: 145.868 ms in a panel rep versus
+29.781 ms in a rep without it. Section 16 remains the run's only SKIP (`no device
+with SDK >= 30`), which is the phone attached here, not the gate.
+
+**The one criterion this build cannot meet, with the number that says so.** §5.3
+also asks for `p99_overlay < 3 ms` in absolute terms. The pre-existing filter
+engine — the thing the panel edits, not the panel — measures p99 5.888 ms at
+720x1280 **with no panel at all** in the same run (5.466 ms standalone,
+`out/ov/v3_pr6_overlay.log`), so no overlay design can bring that tail under 3 ms
+without deleting the filters. The gate prints the cap as a measured `NOTE`
+carrying both numbers rather than reporting a false pass, and the fallback the
+directive offers (degrade to a launcher panel) was rejected on that evidence: the
+feature's point is changing the grade during a session, and the A/B shows the
+separate window is not what costs anything.
+
+**Launcher wiring (§5.4 persistence).** Four JSON fields (`filterOverlay`,
+`overlayHotkey`, `overlayVisible`, `filterProfiles`), a *Panel de filtros en tiempo
+real* block at the end of the Filtros tab, and the grades in
+`%APPDATA%\GamingScrcpy\filters.profiles` — the same format the client reads, so
+the launcher seeds it before the session starts and harvests it back into the
+session JSON on save, which is what makes a grade travel with a profile and survive
+a restart. The hotkey box is free text, and a combo the client cannot register
+would leave the panel answering only to `Esc`; `AppConfig.NormalizeOverlayHotkey()`
+mirrors `parse_hotkey()`'s grammar (modifiers plus exactly one of `f1`-`f9`, letter
+or digit, at least one modifier), the UI shows a localized warning while you type,
+and an invalid combo is never emitted so the client default stays alive.
+`--validate-profiles` proves both halves: the synthetic all-settings profile now
+emits `--game-overlay-hotkey=ctrl+shift+f9 --game-overlay-visible`, and a profile
+built with `super+alt+hyper` prints `PASS invalid overlay hotkey dropped`. The
+three new controls (`ChkFilterOverlay`, `TxtOverlayHotkey`, `ChkOverlayVisible`)
+were added to the UIA plan so section 10 finds them in the live window, and the two
+panel rows (`Super+Alt+F`, `Esc`) filled the previously empty *Filtros* category of
+the shortcut table.
+
+**Three more defects, found by packaging rather than by coding.** (1) The published
+launcher ran its self-test against the *stale* `dist` client, so all 11 profiles
+failed with `unknown option -- game-filter-overlay`: the argument builder was right
+and the packaged binary was old. Refreshed `dist\GamingScrcpy\scrcpy\scrcpy.exe`
+and `gamingdemo.exe`, re-ran, `ALL PROFILES VALID`. (2) `tools/overlay_test.sh` had
+a false-green shape: run from a shell without the UCRT64 `PATH` every demo call
+exited 127, and the awk comparisons read the empty strings as 0 and printed
+`OK |median difference| = 0.000 ms < 1 ms`. Now the script puts the UCRT64 bin
+directory on `PATH` itself when it exists, and the numeric section refuses to run —
+`FAIL a run produced no postfx-cost census or no fps line, cannot compare`, exit 1
+— unless all six values are present. A gate that can print OK on nothing is worse
+than no gate. (3) The same script could not run from the deliverable at all: it
+resolved `gamingdemo.exe` from `workspace/scrcpy/build-usb/app/` only, so inside an
+extracted ZIP it printed `FAIL demo harness missing: …pkg…/workspace/scrcpy/…`
+while every other packaged harness (`fx_pixel_test.sh`,
+`recorder_integrity_test.sh`, `theme_audit.sh`) passed there. It now searches the
+build tree, `dist/GamingScrcpy/scrcpy/` and the package's own `scrcpy/` the same way
+`fx_pixel_test.sh` does, and the packaged re-run passed the whole section. The
+same sweep caught the two PowerShell harnesses doing the identical thing with the
+launcher exe — `launcher_uiauto.ps1` printed `MISSING …\out\pkg_pr6b\dist\
+GamingScrcpy\launcher\GamingScrcpyLauncher.exe` from inside the package — so both
+now resolve `dist\GamingScrcpy\launcher\` first and the package's own `launcher\`
+second, and `UIAUTO OK` has since been produced from the extraction itself. The
+reason this class of bug only appears in the extraction is that the extraction is
+the only layout where the build tree is absent — which is also why the directive
+asks for the ZIP, not the folder, as the deliverable.
+
+**Device evidence.** `out\shots\v5_overlay_panel.png` is the panel's own pixels
+(496x400, Spanish, five buttons inside the frame); `out\shots\v5_overlay_live.png`
+is that panel over a live mirror of the moto g(7) power, captured from the desktop
+while the session ran. Everything else about the panel runs against `gamingdemo`
+with no phone; the on-device parts that need eyes are the six manual steps of
+README §7 item 15 (global hotkey with another app focused, taken-combo fallback,
+live slider, saved grade after a restart, no phantom touch from panel clicks, OSD
+timing unchanged).
+
+### 5.1ao. v3 §6 triage: what already exists, what is cheap, what is backlog
+
+The seven recommendations were checked against the shipped code rather than
+assumed, because two of them turned out to be already done and one is a
+half-truth. Cost is in working minutes for someone who knows this tree.
+
+| §6 item | state in this build | cost / benefit of the rest |
+|---|---|---|
+| Health check general (SDK, audio, códec, renderer, latencia esperada) | **partly shipped.** *Diagnóstico de audio* covers SDK, support, the server's own refusal line, sink state and device volume. The renderer and latency numbers are measured by `tools/render_driver_test.sh` and `tools/device_latency_matrix.sh` and recorded here, not surfaced in the window. There is no single panel that says all five. | ~90 min to compose the existing probes into one panel. Benefit is presentation, not information: every number it would show is already reachable. **Backlog, low value.** |
+| Indicador "audio activo" | **not the same thing as what exists.** `TxtAudioBadge` reports *support* (`compatible` / `NO SOPORTADO (needs Android 11+)`) from the SDK; nothing reports that a stream is flowing now. | ~2 h and it needs a real signal: the client would have to surface decoded-audio counters, which is a C-side change plus a gate check on a device this host does not have (Android 11+). Until then a WPF-side "active" lamp would be exactly the silently-lying control §1.2 forbids. **Backlog, blocked on hardware.** |
+| Preset "Presentation mode" (borderless + always-on-top + OSD mínimo + filtros, un click) | **reachable but not one click.** Every ingredient is a config field, and the 11 session profiles carry combinations of them. | ~40 min: one button that sets four fields and starts. Real value for the streaming use case, no new risk (the same flags are already validated by `--validate-profiles`). **Candidate for the next PR.** |
+| Auto-detección cada 3 s en foreground | **not implemented.** `grep -rn "DispatcherTimer" launcher/*.cs` returns nothing; the list fills on `Loaded` and on the *Rescan ADB* button. | ~30 min (a timer gated on `IsActive`, reusing `RefreshDevicesAsync`). Benefit is visible every day the phone is plugged in after the launcher is open. The cost is a periodic `adb devices`, which the read-only rules already allow and gate §14 already pins. **Candidate for the next PR.** |
+| Última config + botón "Relaunch" | **half shipped.** The settings are persisted under `%APPDATA%\GamingScrcpy` and reloaded at start — the window came back in the language and with the device selected in the previous session — so the last configuration *is* the startup configuration. There is no "relaunch the session I just closed" button. | ~1 h for a button that re-arms the last device and profile. Moderate value, small surface. **Backlog.** |
+| Cerrar el defecto #20 (borderless al arranque) | **open, and narrowed.** `--game-borderless-fullscreen` now logs `Borderless fullscreen on (WxH)` and `tools/window_style_probe.ps1` proves the caption bits are cleared, but the first frame still resizes the window back to the content size afterwards. | ~3 h in `screen.c`/`scrcpy.c` ordering, in the file the upstream-diff invariant (§13) watches most closely. Deferred deliberately: it is the one remaining change that can break the "never alter what the device renders" rule. |
+| Customización de hotkeys desde la UI (persistente) | **shipped.** `RefreshKeymaps()` feeds a keymap editor whose result lands in `cfg.ShortcutMods` and is emitted as `--shortcut-mod=…`, persisted in the same JSON. The filter panel's own `Super+Alt+F` became editable in this PR. | nothing left to build. |
+
+Two of the seven are therefore already done, two are ~1 hour of work with real
+daily value and no new risk, and three are either presentation-only or blocked on
+hardware and on the §13 invariant. That ordering is the reason the two cheap ones
+were *not* folded into this PR: §7.2 asks for one feature per commit, and PR-6 is
+already the largest of the round.
+
+The triage also turned up one dead row: `TabPerf` ("Rendimiento" / "Performance")
+is still a `Loc.cs` key but no XAML uses it — the v3 tab consolidation folded the
+performance content into the other tabs and left the label behind. It is invisible
+to the user and to the key-parity check (the key exists in both languages), so it
+is recorded here rather than silently deleted, next to the same class of leftover
+the duplicate-key count in §15 catches.
+
+
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so
 the device-side claims below are narrower than they were. What this host still

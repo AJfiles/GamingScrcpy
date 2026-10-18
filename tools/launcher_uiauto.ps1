@@ -14,8 +14,16 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$exe = Join-Path $root 'dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe'
-if (-not (Test-Path $exe)) { Write-Output "MISSING $exe"; exit 1 }
+# A build tree keeps the published launcher under dist\GamingScrcpy\launcher, an
+# extracted package keeps it one level up next to this tools\ directory. The
+# second layout used to fail with "MISSING …\dist\GamingScrcpy\…", which is how
+# the gate's own UIA contract stayed unproven inside the shipped artifact.
+$exe = $null
+foreach ($c in (Join-Path $root 'dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe'),
+               (Join-Path $root 'launcher\GamingScrcpyLauncher.exe')) {
+    if (Test-Path $c) { $exe = $c; break }
+}
+if (-not $exe) { Write-Output 'MISSING GamingScrcpyLauncher.exe (build tree or extracted package)'; exit 1 }
 
 $AE = [System.Windows.Automation.AutomationElement]
 $TS = [System.Windows.Automation.TreeScope]
@@ -78,6 +86,8 @@ try {
                                         'SldSharp','LblSharp','SldNight','LblNight',
                                         'SldSat','LblSat','SldContrast','LblContrast',
                                         'SldBright','LblBright','SldGamma','LblGamma',
+                                        'ChkFilterOverlay','TxtOverlayHotkey',
+                                        'ChkOverlayVisible',
                                         'BtnProfileNeutral','BtnProfileVivid',
                                         'BtnProfileCinematic','BtnProfileNight',
                                         'BtnResetSharp','BtnResetNight','BtnResetSat',

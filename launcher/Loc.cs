@@ -270,6 +270,59 @@ namespace GamingScrcpyLauncher
             new[] { "ItemOsdNone", "ninguno", "none" },
 
             new[] { "SecFilters", "FILTROS DE IMAGEN (host)", "IMAGE FILTERS (HOST SIDE)" },
+            new[] { "SecFilterPanel", "PANEL DE FILTROS EN TIEMPO REAL",
+                    "REAL-TIME FILTER PANEL" },
+            new[] { "ChkFilterPanel", "Panel flotante sobre el mirror",
+                    "Floating panel over the mirror" },
+            new[] { "TipFilterPanel",
+                    "Ventana propia, siempre encima: mueve el color del "
+                    + "espejo sin tocar el pipeline del frame. Medido: la "
+                    + "mediana por frame no cambia con el panel abierto.",
+                    "Its own always-on-top window: it changes the mirror's "
+                    + "colour without touching the frame pipeline. Measured: "
+                    + "the median per-frame cost does not move with the panel "
+                    + "open." },
+            new[] { "LblOverlayHotkey", "Atajo global", "Global hotkey" },
+            new[] { "TipOverlayHotkey",
+                    "Modificador+tecla separados por +, por ejemplo "
+                    + "super+alt+f. Evita super/alt+F1 a F5, que ya son "
+                    + "atajos del espejo. Si otra app tiene esa combinación, "
+                    + "el panel se abre con la misma tecla mientras el "
+                    + "espejo tenga el foco.",
+                    "Modifiers and one key joined by +, e.g. super+alt+f. "
+                    + "Avoid super/alt+F1 to F5, already mirror shortcuts. "
+                    + "If another app owns the combination, the same key "
+                    + "still opens the panel while the mirror has focus." },
+            new[] { "ChkOverlayVisible", "Abrirlo al empezar la sesión",
+                    "Open it when the session starts" },
+            new[] { "TipOverlayVisible",
+                    "Sin marcar, el panel espera al atajo global.",
+                    "Unmarked, the panel waits for the global hotkey." },
+            new[] { "NoteOverlayHotkey",
+                    "Esa combinación no es válida: se necesita al menos un "
+                    + "modificador (ctrl, alt, shift, super) y una sola tecla "
+                    + "(f1 a f9, una letra o un número). Se usará super+alt+f.",
+                    "That combination is not valid: it needs at least one "
+                    + "modifier (ctrl, alt, shift, super) and exactly one key "
+                    + "(f1 to f9, a letter or a digit). super+alt+f will be "
+                    + "used instead." },
+            new[] { "NoteOverlayProfiles",
+                    "Los grados con nombre se guardan en "
+                    + "%APPDATA%\\GamingScrcpy\\filters.profiles, se aplican "
+                    + "al empezar y se guardan con el perfil de sesión.",
+                    "Named grades live in %APPDATA%\\GamingScrcpy\\"
+                    + "filters.profiles, are applied at session start and "
+                    + "travel with the session profile." },
+            new[] { "ScActFilterPanel", "Panel de filtros",
+                    "Filter panel" },
+            new[] { "ScDescFilterPanel",
+                    "Abre o cierra el panel flotante de filtros en vivo",
+                    "Shows or hides the floating live filter panel" },
+            new[] { "ScActClosePanel", "Cerrar el panel", "Close the panel" },
+            new[] { "ScDescClosePanel",
+                    "Cierra el panel de filtros sin cambiar el grado activo",
+                    "Closes the filter panel without changing the active "
+                    + "grade" },
             new[] { "LblContrast", "Contraste %", "Contrast %" },
             new[] { "LblBrightness", "Brillo %", "Brightness %" },
             new[] { "LblGamma", "Gamma %", "Gamma %" },

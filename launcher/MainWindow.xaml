@@ -511,6 +511,37 @@
                                     Content="{DynamicResource BtnResetFilter}"
                                     Style="{StaticResource Chip}" Click="OnResetFilter" Tag="gamma"/>
                         </Grid>
+                        <TextBlock Text="{DynamicResource SecFilterPanel}"
+                                   Style="{StaticResource SectionHeader}" Margin="0,24,0,8"/>
+                        <CheckBox x:Name="ChkFilterOverlay" Margin="0,4"
+                                  Content="{DynamicResource ChkFilterPanel}"
+                                  ToolTip="{DynamicResource TipFilterPanel}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="{DynamicResource LblOverlayHotkey}"
+                                       Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="TxtOverlayHotkey" Grid.Row="0" Grid.Column="1"
+                                     Margin="0,4" FontFamily="Consolas, Cascadia Mono, monospace"
+                                     TextChanged="OnOverlayHotkeyChanged"
+                                     ToolTip="{DynamicResource TipOverlayHotkey}"/>
+                            <CheckBox x:Name="ChkOverlayVisible" Grid.Row="1" Grid.Column="1"
+                                      Margin="0,4" Content="{DynamicResource ChkOverlayVisible}"
+                                      ToolTip="{DynamicResource TipOverlayVisible}"/>
+                        </Grid>
+                        <TextBlock x:Name="LblOverlayHotkeyBad"
+                                   Text="{DynamicResource NoteOverlayHotkey}"
+                                   Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                   TextWrapping="Wrap" Visibility="Collapsed"/>
+                        <TextBlock Text="{DynamicResource NoteOverlayProfiles}"
+                                   Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                   TextWrapping="Wrap"/>
                     </StackPanel>
                 </TabItem>
 

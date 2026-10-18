@@ -71,6 +71,11 @@ enter `ip:port` + 6-digit code), then **Connect ip:port**. For older devices use
 | `--game-contrast=` | 0-200 | Luma contrast pivoted at mid grey (100 = unchanged). Shares one 256-entry table with brightness, gamma and night-boost, so the whole grade is a single pass over the Y plane. |
 | `--game-brightness=` | 0-200 | Luma offset, 100 = unchanged, 0 = black, 200 = white. Brightens the **PC's** picture: it never writes the device's screen brightness (guarded by `tools/device_filter_test.sh`, which compares a read-only `dumpsys display` snapshot before and after). |
 | `--game-gamma=` | 25-200 | Luma transfer curve, 100 = unchanged, above brightens the mid-tones. Below 25 is rejected: the curve would only crush the picture to black. |
+| `--game-filter-overlay` | — | Open the **real-time filter panel**: a borderless always-on-top window of its own (496×400) that edits the six `--game-postfx` parameters while the session runs. It adds no pass to the mirrored frame — the sliders only write the engine's parameters — and it is hidden until the hotkey opens it. |
+| `--game-overlay-hotkey=` | combo | Global hotkey that shows and hides that panel, written as modifiers joined by `+` plus one key: `super+alt+f` (the default), `ctrl+shift+f9`. Valid modifiers are `ctrl`/`control`, `alt`, `shift`, `super`/`win`/`meta`; valid keys are `f1`-`f9`, one letter or one digit, and at least one modifier is required. Avoid `super/alt+F1-F5`: those are the mirror's own runtime toggles. Registered with Windows, so it works when the mirror is not focused; if another program owns the combo, the log says so and the same key still toggles the panel while the mirror has focus. |
+| `--game-overlay-visible` | — | Show the panel at session start instead of waiting for the hotkey. |
+| `--game-overlay-english` | — | Paint the panel's labels in English (Spanish is the default; the launcher passes this when its own language is not Spanish). |
+| `--game-filter-profiles=` | path | File the panel reads and writes its grades in: one `current c s b g sh n` line plus `profile NAME c s b g sh n` lines. Without it the panel works but says it cannot save. The launcher keeps its grades in this format at `%APPDATA%\GamingScrcpy\filters.profiles`, so a look survives a session restart and travels with the session profile. |
 | `--game-borderless-fullscreen` | — | Borderless fullscreen sized to the monitor: no DWM frame, but still a normal window, so OBS **Window Capture** and Alt+Tab keep working. |
 | `--game-low-latency` | — | Turns off presentation vsync (lowest display latency; may tear). |
 | `--game-cursor-autohide=` | ms | Hides the PC cursor when idle, restores it on mouse move. |
@@ -253,11 +258,26 @@ change it with `--shortcut-mod=f1,super`. Key combinations are not translated.
 | `MOD+Z` / `MOD+Shift+Z` | Pause / resume the stream | |
 | `MOD+Shift+R` | Restart the video encoder | |
 | `MOD+N` | Open the notification panel | |
+| **Filters (the panel is the client's own window, not the mirror's)** | | |
+| `Super+Alt+F` | Show / hide the real-time filter panel | global: works with any other app focused; change it in **Filtros → Panel de filtros** |
+| `Esc` | Close the panel | also the only key that works if the combo is taken or unparsable |
+
+Inside the panel (Spanish labels, English with `--game-overlay-english`): drag its
+header to move it, `REINICIAR` puts the six sliders back to neutral, `GUARDAR`
+writes a named grade and `CARGAR` cycles the stored ones — before any profile file
+exists it cycles the five built-in presets Neutral, Vivid, Cinematic, Night and
+Competitive. `CANCELAR` returns to the values the panel was opened with, and
+`APLICAR` re-applies and persists the grade as `current`. Every slider is already
+live while you drag it — none of these buttons is what makes the picture change.
+Keyboard: `Tab` cycles the highlight over the six sliders and five buttons,
+`Left`/`Right` move a highlighted slider by 5, `Return` presses a highlighted
+button, `Esc` closes the panel.
 
 Recording has no shortcut in scrcpy 5 (`MOD+r` is *rotate*), so the launcher does
 not invent one: start a recording from the launcher buttons or with
-`--record-file`. The image filters have no runtime shortcut either — they are
-applied when the session starts, from the **Filtros** tab.
+`--record-file`. The filters *do* have one now (`Super+Alt+F`, above); the
+**Filtros** tab still sets the grade the session starts with, and the panel edits
+that same engine state while it runs.
 
 ## 6. Measured cost of the post-filters
 
@@ -272,6 +292,32 @@ That is ~7-8 ms/frame at 1080p — enough to eat a 60 fps budget. The filters ar
 therefore **off by default**, and the OSD exists so you can watch what they cost
 on *your* machine. If you want them for a stream but not for play, enable them
 only in the recording/bridge profile.
+
+### Opening the panel adds nothing to that number
+
+`bash tools/overlay_test.sh` (gate section 18) runs **each arm twice** with the
+same grade — once with no panel, once with the panel open and a show/hide toggle
+every 150 frames — and compares the engine's own per-frame census best-rep
+against best-rep. That is deliberate: p99 of a CPU-bound pass on a desktop that
+is also streaming a phone is dominated by other processes, and one contended rep
+moves it by more than the feature under test (the same arm measured 4.855 ms and
+9.347 ms in two consecutive reps). Every raw census is printed, so the comparison
+stays checkable. The table is one such pair from a quiet desktop
+(`out/ov/v3_pr6_overlay.log`):
+
+| run (720x1280, 1000 frames, same grade) | median | p90 | p99 | fps presented |
+|---|---|---|---|---|
+| no panel | 3.273 ms | 3.811 ms | 5.466 ms | 63.2 |
+| panel open + toggles | 3.277 ms | 3.892 ms | 5.472 ms | 64.0 |
+
+|Δmedian| is 0.004 ms and |Δp99| 0.006 ms: the panel only writes parameters, so
+the mirror's pipeline is the same code path with the same cost. The panel's own
+tick is 12-20 µs when idle and repaints only while you interact (a 496x400
+software repaint costs 5-10 ms, and it happens on the panel's window, never on
+the mirror's). The directive also asks for `p99 < 3 ms` in absolute terms: the
+filter engine alone exceeds that (5.466 ms with no panel at all), so the gate
+reports the cap as a measured NOTE with both numbers instead of pretending the
+cap passed or degrading the feature to a launcher panel.
 
 **Recording while mirroring is a different matter: it is nearly free.** Measured
 with `recorderintegrity --bench` on 1280x720 H.264 at ~30 kB per packet, pushed
@@ -521,6 +567,33 @@ What still needs your hands and eyes:
       controls must be enabled, and the log lines must agree with the server
       about SDK, support and sink state.
     Nothing here writes to the device: one `getprop` and scrcpy's own session.
+
+15. **The real-time filter panel on a live mirror** — gate section 18 proves the
+    panel paints, stays reachable, keeps its grade in the profiles file and does
+    not move the per-frame cost, but it does that against `gamingdemo`, so these
+    parts need you:
+    * start a mirror from the launcher (Filtros → *Panel de filtros en tiempo
+      real* stays checked) and press `Super+Alt+F` while **another program has
+      the focus**: the panel must appear over the mirror anyway, because the
+      hotkey is registered with Windows;
+    * if the log says `overlay: global hotkey '…' is taken (error 1409)`, another
+      program owns that combo: the same key still opens the panel while the
+      mirror is focused, and `Esc` closes it. Pick a different combo in the
+      launcher (e.g. `ctrl+alt+f9`) and restart the session — the log line at
+      startup prints the combo the panel is listening for;
+    * drag a slider: the mirrored picture changes **while you drag**, with no
+      restart; click `CANCELAR` and it must return to the values the panel opened
+      with;
+    * click `GUARDAR`, close the session, start it again: the grade you saved
+      must already be applied at session start, with the panel never opened
+      (the OSD or `--game-telemetry-log` shows the same numbers);
+    * click a slider inside the panel and check the device: no touch marker or
+      phantom tap may reach the phone from panel clicks (the visualizer is the
+      detector — gate section 18 covers the event isolation in code, your eyes
+      cover the picture);
+    * with the panel open, the OSD `postfx` timing must read the same as with it
+      closed. On a 1080p mirror it will be higher than the 720x1280 numbers in §6
+      — that is the filter engine, not the panel.
 
 ### The read-only rule
 

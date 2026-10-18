@@ -161,6 +161,35 @@ public static class ProfileStore
     public static string ProfilesDir => Path.Combine(Root, "profiles");
     public static string KeymapsDir => Path.Combine(Root, "keymaps");
     public static string RecordingsDir => Path.Combine(Root, "recordings");
+    // the file the client's filter panel reads and writes (v3 §5.4)
+    public static string FilterProfilesPath => Path.Combine(Root, "filters.profiles");
+
+    // The panel keeps its profiles in one file; a session profile carries the
+    // same lines inside its JSON. Seeding happens before every launch so a
+    // loaded session restores the grades the user saved with it, and only
+    // overwrites the file when the session actually has some.
+    public static void SeedFilterProfiles(AppConfig cfg)
+    {
+        if (cfg.FilterProfiles.Count == 0)
+        {
+            return;
+        }
+        var want = string.Join('\n', cfg.FilterProfiles) + '\n';
+        if (File.Exists(FilterProfilesPath)
+                && File.ReadAllText(FilterProfilesPath) == want)
+        {
+            return;
+        }
+        File.WriteAllText(FilterProfilesPath, want);
+    }
+
+    public static List<string> HarvestFilterProfiles() =>
+        File.Exists(FilterProfilesPath)
+            ? File.ReadAllLines(FilterProfilesPath)
+                 .Where(l => !string.IsNullOrWhiteSpace(l) && !l.StartsWith('#'))
+                 .Select(l => l.Trim())
+                 .ToList()
+            : new List<string>();
 
     static ProfileStore()
     {

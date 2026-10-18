@@ -70,6 +70,19 @@ public sealed class AppConfig
     [JsonPropertyName("brightness")] public int Brightness { get; set; } = 100;
     [JsonPropertyName("gamma")] public int Gamma { get; set; } = 100;
 
+    // ---- real-time filter panel (directive v3 §5) ----
+    // The panel is a window of the client's own, so the launcher only decides
+    // whether it exists, which key opens it, and where its profiles live.
+    // On by default: opening it costs nothing on the frame path (measured in
+    // tools/overlay_test.sh), and the user asked for the shortcut to be there.
+    [JsonPropertyName("filterOverlay")] public bool FilterOverlay { get; set; } = true;
+    [JsonPropertyName("overlayHotkey")] public string OverlayHotkey { get; set; } = "super+alt+f";
+    [JsonPropertyName("overlayVisible")] public bool OverlayVisible { get; set; }
+    // The named profiles travel with the session: these are the exact lines of
+    // the client's profile file, so saving a session carries them and loading
+    // one restores them (v3 §5.4).
+    [JsonPropertyName("filterProfiles")] public List<string> FilterProfiles { get; set; } = new();
+
     // The Performance tab has nothing to draw without this, and the fork prints
     // one line per second, so it is on by default. A profile can still turn it
     // off (the JSON key wins over the initializer when it is present).
@@ -122,6 +135,46 @@ public sealed class AppConfig
         "point" or "bilinear" or "fast" or "bicubic" or "lanczos" or "off" => value,
         _ => "off",
     };
+
+    // overlay.c only registers a combo it can turn into a Windows hotkey:
+    // modifiers joined by '+' plus exactly one key (f1-f9, a letter or a
+    // digit). Anything else silently leaves the panel reachable only by Esc
+    // inside the mirror, so an invalid combo is dropped here and the default
+    // stays live instead of shipping a panel nobody can open.
+    public static string? NormalizeOverlayHotkey(string? raw)
+    {
+        const string combined = "super+alt+f";
+        var text = (raw ?? "").Trim();
+        if (text.Length == 0)
+        {
+            return combined;
+        }
+        var tokens = text.ToLowerInvariant().Split('+');
+        bool mods = false;
+        bool key = false;
+        foreach (var token in tokens)
+        {
+            bool isMod = token is "ctrl" or "control" or "alt" or "shift"
+                         or "super" or "win" or "meta";
+            bool isKey = token.Length == 1
+                             ? token[0] is >= 'a' and <= 'z' or >= '0' and <= '9'
+                             : token.Length == 2 && token[0] == 'f'
+                               && token[1] is >= '1' and <= '9';
+            if (isMod)
+            {
+                mods = true;
+            }
+            else if (isKey && !key)
+            {
+                key = true;
+            }
+            else
+            {
+                return null;
+            }
+        }
+        return mods && key ? string.Join("+", tokens) : null;
+    }
 
     public static string? NormalizeBridgeScale(string value)
     {
@@ -313,6 +366,25 @@ public sealed class AppConfig
             // the fork floors gamma at 25: below that the curve is a black
             // screen, and a slider dragged to its end must not produce one
             if (FxGamma) a.Add($"--game-gamma={Math.Max(25, Gamma)}");
+        }
+        if (FilterOverlay)
+        {
+            ProfileStore.SeedFilterProfiles(this);
+            a.Add("--game-filter-overlay");
+            var hk = NormalizeOverlayHotkey(OverlayHotkey);
+            if (hk != null && hk != "super+alt+f")
+            {
+                a.Add($"--game-overlay-hotkey={hk}");
+            }
+            if (OverlayVisible)
+            {
+                a.Add("--game-overlay-visible");
+            }
+            a.Add($"--game-filter-profiles={ProfileStore.FilterProfilesPath}");
+            if (!string.Equals(Loc.Instance.Language, "es", StringComparison.OrdinalIgnoreCase))
+            {
+                a.Add("--game-overlay-english");
+            }
         }
         if (TouchVisualizer)
         {
