@@ -112,6 +112,10 @@ struct sc_gaming_overlay {
     unsigned v[SL_COUNT];
     unsigned snapshot[SL_COUNT]; // what CANCELAR returns to
     bool changed;               // the user moved something in this session
+    bool fading;                // the open animation is still running
+    bool fade_logged;           // the panel has reported how its open went
+    Uint32 fade_start;          // SDL_GetTicks() when the panel was shown
+    SDL_TimerID fade_timer;     // wakes the event loop while fading
     struct filter profiles[PROFILE_MAX];
     unsigned profile_count;
     int loaded;                  // index into profiles, -1 when unsaved
@@ -128,7 +132,15 @@ struct sc_gaming_overlay {
 
 static struct sc_gaming_overlay *g_active;
 static Uint32 g_toggle_type;
+static Uint32 g_fade_type;
 static bool g_toggle_registered;
+
+// v4 §5.2: the panel appears with a 120 ms fade rather than popping in over the
+// game. It animates the window opacity, not the pixels, so the ramp costs a
+// handful of SetWindowOpacity calls and no repaint: the panel still blits only
+// when it is dirty, and the mirror's per-frame path never sees it.
+#define FADE_MS 120
+#define FADE_STEP_MS 20
 
 // ---------------------------------------------------------------------------
 // grade <-> engine
@@ -696,6 +708,9 @@ set_visible(struct sc_gaming_overlay *o, bool visible) {
         o->grabbed = -1;
         o->hover = -1;
         if (o->window) {
+            // hiding mid-fade must not leave the panel transparent for the next show
+            o->fading = false;
+            SDL_SetWindowOpacity(o->window, 1.0f);
             SDL_HideWindow(o->window);
         }
     }
@@ -779,6 +794,47 @@ sc_gaming_overlay_want_local_hotkey(struct sc_gaming_overlay *o,
 #endif
 }
 
+// The event loop blocks in SDL_WaitEvent, so nothing would wake it to advance
+// the ramp. The timer only posts an event -- every pixel change happens on the
+// main thread, in the tick below, exactly like the hotkey thread does.
+static Uint32 SDLCALL
+fade_wakeup(void *userdata, SDL_TimerID timerID, Uint32 interval) {
+    (void) userdata;
+    (void) timerID;
+    struct sc_gaming_overlay *o = g_active;
+    if (!o || !o->fading || !g_fade_type) {
+        return 0; // stop re-arming once the ramp is over
+    }
+    SDL_Event ev;
+    SDL_zero(ev);
+    ev.type = (SDL_EventType) g_fade_type;
+    SDL_PushEvent(&ev);
+    return interval;
+}
+
+// The same switch the launcher reads through SystemParameters.ClientAreaAnimation:
+// a user who turned Windows animations off gets the panel at full opacity at once.
+static bool
+overlay_animations_ok(void) {
+    // the harness has to exercise the ramp on a host whose Windows setting is
+    // off (this build machine is one), and no shipped path sets this variable
+    if (SDL_getenv("GAMINGSCRCPY_FORCE_FADE")) {
+        return true;
+    }
+#ifdef _WIN32
+# ifndef SPI_GETCLIENTAREAANIMATION
+#  define SPI_GETCLIENTAREAANIMATION 0x1048
+# endif
+    BOOL on = TRUE;
+    if (!SystemParametersInfoA(SPI_GETCLIENTAREAANIMATION, 0, &on, 0)) {
+        return true; // unreadable setting: animate, like the default of the API
+    }
+    return on != FALSE;
+#else
+    return false; // only Windows has an opacity path here; others paint at once
+#endif
+}
+
 void
 sc_gaming_overlay_tick(void) {
     struct sc_gaming_overlay *o = g_active;
@@ -794,6 +850,37 @@ sc_gaming_overlay_tick(void) {
         SDL_ShowWindow(o->window);
         SDL_RaiseWindow(o->window);
         o->dirty = true;
+        if (overlay_animations_ok()) {
+            o->fading = true;
+            o->fade_start = SDL_GetTicks();
+            SDL_SetWindowOpacity(o->window, 0.0f);
+            if (!o->fade_timer) {
+                o->fade_timer = SDL_AddTimer(FADE_STEP_MS, fade_wakeup, NULL);
+            }
+            if (!o->fade_timer) {
+                // no timer means no wakeups, and a half-transparent panel would
+                // never be raised: fall back to the instant show
+                LOGW("overlay: fade timer unavailable, showing the panel at once");
+                o->fading = false;
+                SDL_SetWindowOpacity(o->window, 1.0f);
+            }
+        } else if (!o->fade_logged) {
+            o->fade_logged = true;
+            LOGI("filter-overlay: open fade skipped (Windows animations are off)");
+        }
+    }
+    if (o->fading && o->window) {
+        Uint32 elapsed = SDL_GetTicks() - o->fade_start;
+        float a = elapsed >= FADE_MS ? 1.0f : (float) elapsed / (float) FADE_MS;
+        SDL_SetWindowOpacity(o->window, a);
+        if (a >= 1.0f) {
+            o->fading = false;
+            if (!o->fade_logged) {
+                o->fade_logged = true;
+                LOGI("filter-overlay: open fade complete in %u ms (opacity back to 1.00)",
+                     elapsed);
+            }
+        }
     }
     if (o->visible && o->window && o->dirty) {
         overlay_paint(o);
@@ -1109,8 +1196,10 @@ sc_gaming_overlay_create(struct sc_gaming *gaming,
     o->loaded = -1;
 
     if (!g_toggle_registered) {
-        g_toggle_type = SDL_RegisterEvents(1);
+        // two types: the hotkey posts the first, the fade timer the second
+        g_toggle_type = SDL_RegisterEvents(2);
         g_toggle_registered = g_toggle_type != (Uint32) -1;
+        g_fade_type = g_toggle_type + 1;
     }
     if (!g_toggle_registered) {
         LOGW("overlay: no user event available, the global hotkey is off");
@@ -1183,6 +1272,11 @@ sc_gaming_overlay_destroy(struct sc_gaming_overlay *o) {
     }
 #endif
     SDL_RemoveEventWatch(overlay_watch, o);
+    o->fading = false;
+    if (o->fade_timer) {
+        SDL_RemoveTimer(o->fade_timer);
+        o->fade_timer = 0;
+    }
     if (g_active == o) {
         g_active = NULL;
     }
