@@ -890,6 +890,31 @@ Mbps, `--max-fps=60`, direct3d11:
 | h264, `--video-buffer=0 --render-driver=vulkan` | 699 ms | 1015 ms | 840 ms | 58.8 |
 | av1, defaults | 375 ms | 438 ms | 355 ms | 16.6 |
 
+#### Re-measured on the S23 Ultra (v4 §6.3) — the new baseline
+
+`tools/s23_latency_audio.sh`, `<dev-id-1>` (SM-S918B), 3 reps × 12 s per arm,
+every `lat=` sample pooled and judged by percentiles; host-side recv→present,
+the same quantity as above. Native 2316x1080 unless the row says otherwise.
+Logs: `out/s23/latency_audio2.log`.
+
+| arm | samples | median | p95 | max | fps median |
+|---|---|---|---|---|---|
+| h264 + direct3d11, defaults | 33 | **17 ms** | 36 ms | 39 ms | 59 |
+| h264 + direct3d11, `--game-low-latency` 60 fps @30M | 33 | 19 ms | 68 ms | 83 ms | 59 |
+| h265 + direct3d11, `--game-low-latency` 60 fps @40M | 33 | 19 ms | 55 ms | 550 ms | 59 |
+| h264 + direct3d11, `--game-low-latency` 120 fps @40M | 33 | 20 ms | 55 ms | 56 ms | 59 |
+| h264 + direct3d11, `--max-size=1080` 120 fps @25M | 33 | 67 ms | 90 ms | 119 ms | 60 |
+
+The 44 ms row above is beaten by a factor of ~2.5 on the default path (17 ms
+median, 36 ms p95), so **17 ms is the number to regress against from now on**.
+Two caveats that belong with the numbers, not in a footnote: the run before this
+one measured the same `--game-low-latency` 60 fps arm at a 79 ms median, so a
+single 12 s arm is not comparable with another single 12 s arm — only these
+pooled 33-sample medians are; and the two 120 fps arms present at ~59 fps, i.e.
+this device did not give the client 120 distinct frames under any of these
+settings, so the "120 fps" profiles are validated as *configurations that run*,
+not as a measured 120 fps picture (§6.1 checklist item, still open).
+
 Three readings are defensible from that table, and two are not:
 
 * **Defensible:** the ordering of the first six rows is *not* stable —
@@ -2810,6 +2835,140 @@ gate §22 are written against the reproduction above, and the fix belongs to
 whichever side that test convicts -- the launcher must drain unconditionally, and the
 client should survive a writer that cannot write instead of stopping the render loop.
 
+
+### 5.1ar. v4 §1.3 — the fix that shipped: the panel window is built on first show, and a watchdog ends any session that never paints
+
+Root cause, established by bisection on the S23 Ultra (`<dev-id-1>`,
+`out/bug_gray/bisect.sh` drop-one table): starting a session with the filter
+panel enabled makes the client never present a first frame. Measured with
+`--game-telemetry-log`, which prints one line per second of *painted* video:
+
+| arm | telemetry lines in 8 s | `IsHungAppWindow` |
+|---|---|---|
+| `--video-codec=h264` alone | 9–12 | false |
+| `--video-codec=h264 --game-filter-overlay` (v3 behaviour) | **0** | **true** |
+
+The launcher's hosting was ruled out first: redirecting the child's stderr to a
+file reproduces the hang identically (`tools/parent_mode_probe.ps1`, all three
+parent modes), and the log panel is only 148–251 bytes in a hung session, so
+neither the pipes nor `Dispatcher.Invoke` nor the codec, the frame bridge,
+upscaling, low-latency, telemetry or the failed `RegisterHotKey` (error 1409)
+cause it. What remains is the panel's own second SDL window plus its software
+renderer existing before the mirror has painted: with the window created
+lazily — on the first show, from the main loop — the same command line paints
+60 fps.
+
+Shipped in this step:
+
+* `app/src/overlay.c`: the panel window and renderer are built by
+  `overlay_ensure_window()` on the first show instead of in
+  `_create()`; `sc_gaming_overlay_tick()` creates it, `set_visible()` only
+  records the request (an event watch must not create windows while SDL is
+  pumping), and `sc_gaming_overlay_destroy()` now also cleans up a panel that
+  was never shown. `--game-overlay-visible` is refused with a warning, because
+  asking for the panel before the first paint is exactly the state that costs
+  the picture (gate §22, `panel-shown` arm).
+* `app/src/gaming.c` + `cli.c` + `options.h` + `scrcpy.c`: the stall watchdog
+  (`--game-stall-timeout=…`, default 5000 ms, `off` disables). It waits only
+  for the *first* frame, so an idle or asleep phone is never killed; it logs
+  `ERROR: video-stalled: no frame …ms after the mirror opened`, raises the
+  decoder-error event the session already handles, and exits by itself after
+  2 s if the main loop cannot service it. It is never armed without video
+  playback — measured before the guard: `--no-playback --record` never paints
+  by design and the first version killed a valid recording.
+* `tools/stall_test.sh` (gate §22, five arms) and `tools/verify_all.sh` §22,
+  SKIP-safe without a device. The liveness probe counts `scrcpy.exe` rows in
+  the Windows process table because bash's `$!` is an MSYS2 pid that `tasklist`
+  does not know — the bug that made the first version of this gate report a
+  false FAIL for the control arm.
+* `README_GAMING.md` §12: the (b)/(d)/(e) self-diagnosis commands and the
+  `video-stalled` message.
+
+Still open in §1: the exact SDL call inside the panel's startup that starves
+the first frame. It is no longer reachable through any supported command line,
+and the watchdog now bounds any future variant, so it is documented rather than
+chased. `--game-overlay-visible` therefore no longer shows the panel at
+startup; the hotkey does, once the session is painting.
+
+### 5.1as. v4 §6.1 — S23 Ultra matrix: every codec and renderer paints, and two findings
+
+`tools/s23_matrix.sh` runs each arm for 10 s against `<dev-id-1>` and judges
+"se ve" by presented frames (`telemetry:` lines, 1/s), not by a human glance.
+Logs: `out/s23/`.
+
+| arm | telemetry lines | a_kbps max | verdict |
+|---|---|---|---|
+| h264 + direct3d11 | 9 | 0 | paints |
+| h265 + direct3d11 | 9 | 0 | paints |
+| av1 + direct3d11 | 8 | 0 | paints, **with software decode** (see below) |
+| h264 + opengl | 8 | 0 | paints |
+| h264 + vulkan | 8 | 0 | paints |
+| audio opus | 9 | **0** | video fine, audio carries no bitrate (finding 2) |
+| audio raw | 8 | 187 | audio flows |
+| filter panel (`--game-filter-overlay`) | 9 | 0 | the §1 fix holds on this device |
+| 120 fps low-latency | 9 | 0 | paints |
+| PCM tap (`--game-audio-pcm`) | — | — | 0 bytes, inconclusive (finding 3) |
+
+1. **AV1 decodes in software here.** The four ERROR lines are FFmpeg's hardware
+   probe, not a failure of the session:
+   `Your platform doesn't support hardware accelerated AV1 decoding` →
+   `Failed to get pixel format` → it keeps going and presents frames. The
+   device is a `SM-S918B` (Exynos `dm3qxxx`), so the directive's premise
+   "Snapdragon 8 Gen 2, so AV1 hardware" does not hold for the unit attached;
+   no grey screen results either way. `--hwdec=auto` already falls back.
+2. **`--audio-codec=opus` delivers a_kbps=0 while `raw` delivers 130-187 kbps
+   on Android 14.** Audio is present on the wire with raw, so the encoder and
+   the socket work; the opus path is where the packets stop. This is exactly
+   what gate §16 must now decide, and v4 §6.2 asks for §16 to PASS rather than
+   SKIP — tracked as the next diagnostic task.
+3. **The PCM tap measured 0 bytes, but that arm ran with the default (opus)
+   codec**, so the zero follows finding 2 and proves nothing about the tap.
+   `tools/s23_matrix.sh` now pins `--audio-codec=raw` on the tap arm so the
+   next run measures the pipe itself.
+
+Latency on this device is 17-20 ms host-side median on the arms above, against
+the 44 ms row measured on the older panel; §5.1n carries the full re-measurement
+and the new baseline, and §5.1at carries the audio, tap and recording arms.
+
+### 5.1at. v4 §6.2 — what the S23 Ultra says about audio, and the real bug it exposed
+
+Measured by `tools/s23_latency_audio.sh` against `<dev-id-1>`; logs in
+`out/s23/`.
+
+* **Both codecs produce a real audio track, and both tracks are silent.**
+  `--audio-codec=opus` records an mp4 with an `opus` stream; `--audio-codec=raw`
+  records `pcm_s16le` — the client refuses raw inside MP4 ("Recording to MP4
+  container does not support RAW audio"), so that arm has to record MKV. On
+  both files `ffmpeg -af volumedetect` reports `mean_volume: -91.0 dB` and
+  `max_volume: -91.0 dB`, which is FFmpeg's floor for digital silence.
+* **Silence is the expected content of this run, not a verdict on the audio
+  path.** Nothing was playing on the phone, and the device rules forbid
+  starting media on it, so the measurement proves the plumbing (a stream of the
+  right codec exists for the whole session) and cannot prove audibility. That
+  one step needs a hand on the phone: play something while
+  `scrcpy --audio-codec=opus` mirrors it. Until it is done by the user, §16
+  stays a SKIP with instructions rather than a PASS it has not earned.
+* This reframes §5.1as finding 2. Opus with silence suppression sends nothing
+  when the source is silent, which is exactly the `a_kbps=0` vs `raw=187 kbps`
+  difference measured there. It is now a hypothesis with a cheap test — play
+  audio, re-run, expect `a_kbps>0` — rather than evidence of a broken opus path.
+* **A real bug, still open.** With `--game-audio-pcm=\\.\pipe\gsc_pcm_probe` the
+  client announces the tap with the correct path (`raw bytes ->
+  \\.\pipe\gsc_pcm_probe`) and gives up with a mangled one (`no consumer on
+  '\.\pipe\gsc_pcm_probe' after 10000 ms, disabled`), while a consumer waiting
+  on the exact name times out inside `Connect()`. The tap itself is healthy:
+  3.7 MB in 20 s is precisely 48 kHz × 2 ch × 16 bit, so nothing is lost in the
+  decoder or the resampler — the loss is in the pipe the scrcpy client opens.
+  `tools/pcm_tap_pipe_test.ps1` still passes against `gamingdemo`, so the
+  difference is in the scrcpy wiring, not in the sink code. Tracked as task #42.
+* §6.1 as measured so far: h264/h265/av1 and opengl/vulkan all paint (§5.1as),
+  the filter panel opens and closes without costing the picture, a 60 s 1080p
+  recording is produced and decodes (61.4 s), and the 120 fps arms present at
+  ~59 fps — so "120 fps" is validated as a configuration that runs, not as a
+  measured 120 fps picture. The new profiles cannot be hardware-tested until §3
+  lands, and auto-rescan needs someone to pull the cable, so it stays manual.
+
+
 ## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so
@@ -2944,97 +3103,3 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/launcher_uiauto.ps1
 bash tools/verify_all.sh
 ```
 
-### 5.1as. v4 §6.1 — S23 Ultra matrix: every codec and renderer paints, and two findings
-
-`tools/s23_matrix.sh` runs each arm for 10 s against `<dev-id-1>` and judges
-"se ve" by presented frames (`telemetry:` lines, 1/s), not by a human glance.
-Logs: `out/s23/`.
-
-| arm | telemetry lines | a_kbps max | verdict |
-|---|---|---|---|
-| h264 + direct3d11 | 9 | 0 | paints |
-| h265 + direct3d11 | 9 | 0 | paints |
-| av1 + direct3d11 | 8 | 0 | paints, **with software decode** (see below) |
-| h264 + opengl | 8 | 0 | paints |
-| h264 + vulkan | 8 | 0 | paints |
-| audio opus | 9 | **0** | video fine, audio carries no bitrate (finding 2) |
-| audio raw | 8 | 187 | audio flows |
-| filter panel (`--game-filter-overlay`) | 9 | 0 | the §1 fix holds on this device |
-| 120 fps low-latency | 9 | 0 | paints |
-| PCM tap (`--game-audio-pcm`) | — | — | 0 bytes, inconclusive (finding 3) |
-
-1. **AV1 decodes in software here.** The four ERROR lines are FFmpeg's hardware
-   probe, not a failure of the session:
-   `Your platform doesn't support hardware accelerated AV1 decoding` →
-   `Failed to get pixel format` → it keeps going and presents frames. The
-   device is a `SM-S918B` (Exynos `dm3qxxx`), so the directive's premise
-   "Snapdragon 8 Gen 2, so AV1 hardware" does not hold for the unit attached;
-   no grey screen results either way. `--hwdec=auto` already falls back.
-2. **`--audio-codec=opus` delivers a_kbps=0 while `raw` delivers 130-187 kbps
-   on Android 14.** Audio is present on the wire with raw, so the encoder and
-   the socket work; the opus path is where the packets stop. This is exactly
-   what gate §16 must now decide, and v4 §6.2 asks for §16 to PASS rather than
-   SKIP — tracked as the next diagnostic task.
-3. **The PCM tap measured 0 bytes, but that arm ran with the default (opus)
-   codec**, so the zero follows finding 2 and proves nothing about the tap.
-   `tools/s23_matrix.sh` now pins `--audio-codec=raw` on the tap arm so the
-   next run measures the pipe itself.
-
-Latency on this device is ~14-20 ms host-side in the arms above (the 29 ms and
-335 ms `window_max` outliers are first frames), against the 44 ms median
-measured on the Android 9 Motorola. §5.1n is rewritten from gate §12's own run
-only once that run is read: the full gate is executing against this device now
-and its numbers, including whether §16 audio passes instead of skipping, are
-not recorded here yet.
-
-Root cause, established by bisection on the S23 Ultra (`<dev-id-1>`,
-`out/bug_gray/bisect.sh` drop-one table): starting a session with the filter
-panel enabled makes the client never present a first frame. Measured with
-`--game-telemetry-log`, which prints one line per second of *painted* video:
-
-| arm | telemetry lines in 8 s | `IsHungAppWindow` |
-|---|---|---|
-| `--video-codec=h264` alone | 9–12 | false |
-| `--video-codec=h264 --game-filter-overlay` (v3 behaviour) | **0** | **true** |
-
-The launcher's hosting was ruled out first: redirecting the child's stderr to a
-file reproduces the hang identically (`tools/parent_mode_probe.ps1`, all three
-parent modes), and the log panel is only 148–251 bytes in a hung session, so
-neither the pipes nor `Dispatcher.Invoke` nor the codec, the frame bridge,
-upscaling, low-latency, telemetry or the failed `RegisterHotKey` (error 1409)
-cause it. What remains is the panel's own second SDL window plus its software
-renderer existing before the mirror has painted: with the window created
-lazily — on the first show, from the main loop — the same command line paints
-60 fps.
-
-Shipped in this step:
-
-* `app/src/overlay.c`: the panel window and renderer are built by
-  `overlay_ensure_window()` on the first show instead of in
-  `_create()`; `sc_gaming_overlay_tick()` creates it, `set_visible()` only
-  records the request (an event watch must not create windows while SDL is
-  pumping), and `sc_gaming_overlay_destroy()` now also cleans up a panel that
-  was never shown. `--game-overlay-visible` is refused with a warning, because
-  asking for the panel before the first paint is exactly the state that costs
-  the picture (gate §22, `panel-shown` arm).
-* `app/src/gaming.c` + `cli.c` + `options.h` + `scrcpy.c`: the stall watchdog
-  (`--game-stall-timeout=…`, default 5000 ms, `off` disables). It waits only
-  for the *first* frame, so an idle or asleep phone is never killed; it logs
-  `ERROR: video-stalled: no frame …ms after the mirror opened`, raises the
-  decoder-error event the session already handles, and exits by itself after
-  2 s if the main loop cannot service it. It is never armed without video
-  playback — measured before the guard: `--no-playback --record` never paints
-  by design and the first version killed a valid recording.
-* `tools/stall_test.sh` (gate §22, five arms) and `tools/verify_all.sh` §22,
-  SKIP-safe without a device. The liveness probe counts `scrcpy.exe` rows in
-  the Windows process table because bash's `$!` is an MSYS2 pid that `tasklist`
-  does not know — the bug that made the first version of this gate report a
-  false FAIL for the control arm.
-* `README_GAMING.md` §12: the (b)/(d)/(e) self-diagnosis commands and the
-  `video-stalled` message.
-
-Still open in §1: the exact SDL call inside the panel's startup that starves
-the first frame. It is no longer reachable through any supported command line,
-and the watchdog now bounds any future variant, so it is documented rather than
-chased. `--game-overlay-visible` therefore no longer shows the panel at
-startup; the hotkey does, once the session is painting.

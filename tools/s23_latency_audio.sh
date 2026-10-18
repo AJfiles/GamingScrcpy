@@ -131,7 +131,12 @@ lat_arm h264-1080p-120     --video-codec=h264 --render-driver=direct3d11 \
 # silence measures about -91 dB; anything the user can hear is far above -60.
 aud_arm() { # codec
     local codec=$1
-    local rec=$out/aud_$codec.mp4
+    # measured, not guessed: the client refuses raw audio in an MP4 container
+    # ("Recording to MP4 container does not support RAW audio"), so the raw arm
+    # records to MKV or it measures nothing.
+    local ext=mp4
+    [ "$codec" = raw ] && ext=mkv
+    local rec=$out/aud_$codec.$ext
     rm -f "$rec"
     kill_scrcpy
     "$exe" --serial="$serial" --video-codec=h264 --audio-codec="$codec" \
