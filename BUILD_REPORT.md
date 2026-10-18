@@ -18,7 +18,19 @@ something could not be measured, it says so.
 | Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,213,768 bytes (145,201,480 before PR 7's auto-rescan, §5.1ap; the §5.1al and §5.1am rebuilds did not change the size), window verified on screen, the shortcut panel read back through UI Automation in both languages, and the theme audited by section 20 |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (19 scripts + `fixtures\` + `theme\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh`, `bash tools/fx_pixel_test.sh` and `bash tools/theme_audit.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` (or its inputs under `tools\theme\`) when there is no build tree |
-| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,403,344 bytes on the archive rebuilt for PR-6 (the two earlier repacks measured 126,357,530 and 126,357,592) — ≈120.5 MiB either way, and the copy of this report inside the archive can only ever carry the figure from the previous repack, because the report is inside its own archive; `Expand-Archive` into an empty directory yields **148 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\`, `tools\theme\`), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138, then 140, then 145; every one of those is superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (22 files + `fixtures\` + `theme\`), so a user can re-run the pixel assertions, the filter checks, the latency matrix and the theme audit without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `bash tools/overlay_test.sh` (`OVERLAY OK`, paired Δmedian -0.004 ms, Δp99 +0.312 ms), `powershell tools/launcher_uiauto.ps1` (`UIAUTO OK`, every tab walked and its controls found by automation id), `powershell tools/launcher_tab_shot.ps1 -Tab 0` (window captured), `bash tools/theme_audit.sh` (`THEME OK pairs=15`) with its broken-palette fixture failing as required (`THEME FAIL issues=4`, exit 1), `launcher\GamingScrcpyLauncher.exe --validate-profiles` (`ALL PROFILES VALID`, `PASS invalid overlay hotkey dropped`), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=29 categories=4`) with its duplicate-key fixture — `--validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"` — failing as required (`SHORTCUTS FAIL issues=2`, exit 1). The render-driver sweep and `tools/shortcuts_table_test.ps1` travel in `tools\` but were last executed from the build tree by gate sections 6 and 17, not from this extraction |
+| Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,403,344 bytes on the archive rebuilt for PR-6 (the two earlier repacks measured 126,357,530 and 126,357,592) — ≈120.5 MiB either way, and the copy of this report inside the archive can only ever carry the figure from the previous repack, because the report is inside its own archive; `Expand-Archive` into an empty directory yields **148 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\`, `tools\theme\`), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138, then 140, then 145; every one of those is superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (22 files + `fixtures\` + `theme\`), so a user can re-run the pixel assertions, the filter checks, the latency matrix and the theme audit without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `bash tools/overlay_test.sh` (`OVERLAY OK`, paired Δmedian -0.004 ms, Δp99 +0.312 ms), `powershell tools/launcher_uiauto.ps1` (`UIAUTO OK`, every tab walked and its controls found by automation id), `powershell tools/launcher_tab_shot.ps1 -Tab 0` (window captured), `bash tools/theme_audit.sh` (`THEME OK pairs=15`) with its broken-palette fixture failing as required (`THEME FAIL issues=4`, exit 1), `launcher\GamingScrcpyLauncher.exe --validate-profiles` (`ALL PROFILES VALID`, `PASS invalid overlay hotkey dropped`), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=29 categories=4`) with its duplicate-key fixture — `--validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"` — failing as required (`SHORTCUTS FAIL issues=2`, exit 1). The render-driver sweep and `tools/shortcuts_table_test.ps1` travel in `tools\` but were last executed from the build tree by gate sections 6 and 17, not from this extraction. PR-7 repack: `126,409,440 bytes`, extracted by
+`tools/package_selftest.sh` into an empty directory yielding **150 files under 3
+top-level directories** (`launcher\`, `scrcpy\`, `tools\`; counting the directories
+one level deep, which is a different definition from the 5 above, because `tools\`
+holds `fixtures\` and `theme\` inside it) and 26 files in `tools\`. Verified from
+that extraction: `OVERLAY OK` (paired Δmedian -0.013 ms, Δp99 -5.119 ms, fps 64.3 →
+62.5), `FXPIXEL OK`, `THEME OK pairs=15` with the broken-palette fixture failing,
+the recorder integrity cases, `UIAUTO OK`, the tab screenshot,
+`ALL PROFILES VALID` and `SHORTCUTS OK rows=29 categories=4` with the duplicate
+fixture failing. **Not verified from the extraction: the PR-7 auto-rescan probe**,
+which failed there (`FAIL only 1 adb children in 24s`) for the instrument reason in
+§5.1ap, so this archive carries one check that has to be fixed before it is claimed
+green |
 | Regression suite | `tools\verify_all.sh` | **151 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr5.log` — 145 of those lines were already green at §5.1al and the 6 new ones are section 20, the theme audit: single accent, radius range, no symbol glyphs, a keyboard-focus trigger in the templates, 15 measured contrast pairs and its broken-palette positive control; §5.1am); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
@@ -2665,10 +2677,30 @@ reports a verdict with no evidence behind it. The branch now prints through the
 same inline `printf` the other sections use for harness notes, so the adb-children
 count is in the log next to the PASS it justifies.
 
-The repack and the extracted-ZIP self-test for PR-7 (`tools/package_selftest.sh`,
-whose output is `out/pkg_pr7_selftest.log`) were still running when this section
-was written; no packaged result is claimed here for the PR-7 archive. What is
-claimed is the gate above and the two probe runs, both filed.
+**The PR-7 archive then failed this PR's own new check.** `tools/package_selftest.sh`
+extracted the repack (`out/pkg_pr7_selftest.log`) and every pre-existing harness
+passed from the extraction — `OVERLAY OK` with the paired Δmedian -0.013 ms,
+`FXPIXEL OK`, `THEME OK pairs=15`, the recorder, `UIAUTO OK`, the tab screenshot,
+both validators, and both must-fail fixtures failing as required — but the auto-scan
+probe came back:
+
+```
+note  1 adb children in 24s, window foreground=True
+FAIL only 1 adb children in 24s: the timer is not firing (threshold 3)
+```
+
+`foreground=True` rules out the excuse I first reached for: the window was held, so
+the timer was allowed to poll, and the probe still saw one child where the same build
+produced five minutes earlier inside the gate. The difference is the instrument, not
+the app. Counting children by polling WMI every 200 ms only sees a child that lives
+longer than the interval, and once the adb server is warm each `adb devices` finishes
+inside it — so the count collapses to the one startup refresh that was caught by
+luck. Threshold 3 was therefore never a safe floor, only a floor that happened to
+hold in two runs. The fix is to stop sampling and subscribe: `Win32_ProcessStartTrace`
+delivers one event per process start for the tracked parent pid, so no child can be
+missed, and the threshold can then mean what it says. Until that lands, gate section
+21 is evidence that the timer existed in the runs measured, not a trustworthy check —
+recorded here rather than quietly re-run until green.
 
 **What the gate caught on the way.** The first PR-7 run failed *outside* its own new
 section: §15 (no user-visible literal left in the code-behind) flagged the
