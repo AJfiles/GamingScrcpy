@@ -2982,7 +2982,10 @@ Logs: `out/s23/`.
 
 Latency on this device is ~14-20 ms host-side in the arms above (the 29 ms and
 335 ms `window_max` outliers are first frames), against the 44 ms median
-measured on the Android 9 Motorola; §5.1n is updated from gate §12's own run.
+measured on the Android 9 Motorola. §5.1n is rewritten from gate §12's own run
+only once that run is read: the full gate is executing against this device now
+and its numbers, including whether §16 audio passes instead of skipping, are
+not recorded here yet.
 
 Root cause, established by bisection on the S23 Ultra (`<dev-id-1>`,
 `out/bug_gray/bisect.sh` drop-one table): starting a session with the filter
