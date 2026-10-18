@@ -2944,7 +2944,45 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/launcher_uiauto.ps1
 bash tools/verify_all.sh
 ```
 
-### 5.1ar. v4 §1 — the grey "No responde" window: root cause, fix, gate §22
+### 5.1as. v4 §6.1 — S23 Ultra matrix: every codec and renderer paints, and two findings
+
+`tools/s23_matrix.sh` runs each arm for 10 s against `<dev-id-1>` and judges
+"se ve" by presented frames (`telemetry:` lines, 1/s), not by a human glance.
+Logs: `out/s23/`.
+
+| arm | telemetry lines | a_kbps max | verdict |
+|---|---|---|---|
+| h264 + direct3d11 | 9 | 0 | paints |
+| h265 + direct3d11 | 9 | 0 | paints |
+| av1 + direct3d11 | 8 | 0 | paints, **with software decode** (see below) |
+| h264 + opengl | 8 | 0 | paints |
+| h264 + vulkan | 8 | 0 | paints |
+| audio opus | 9 | **0** | video fine, audio carries no bitrate (finding 2) |
+| audio raw | 8 | 187 | audio flows |
+| filter panel (`--game-filter-overlay`) | 9 | 0 | the §1 fix holds on this device |
+| 120 fps low-latency | 9 | 0 | paints |
+| PCM tap (`--game-audio-pcm`) | — | — | 0 bytes, inconclusive (finding 3) |
+
+1. **AV1 decodes in software here.** The four ERROR lines are FFmpeg's hardware
+   probe, not a failure of the session:
+   `Your platform doesn't support hardware accelerated AV1 decoding` →
+   `Failed to get pixel format` → it keeps going and presents frames. The
+   device is a `SM-S918B` (Exynos `dm3qxxx`), so the directive's premise
+   "Snapdragon 8 Gen 2, so AV1 hardware" does not hold for the unit attached;
+   no grey screen results either way. `--hwdec=auto` already falls back.
+2. **`--audio-codec=opus` delivers a_kbps=0 while `raw` delivers 130-187 kbps
+   on Android 14.** Audio is present on the wire with raw, so the encoder and
+   the socket work; the opus path is where the packets stop. This is exactly
+   what gate §16 must now decide, and v4 §6.2 asks for §16 to PASS rather than
+   SKIP — tracked as the next diagnostic task.
+3. **The PCM tap measured 0 bytes, but that arm ran with the default (opus)
+   codec**, so the zero follows finding 2 and proves nothing about the tap.
+   `tools/s23_matrix.sh` now pins `--audio-codec=raw` on the tap arm so the
+   next run measures the pipe itself.
+
+Latency on this device is ~14-20 ms host-side in the arms above (the 29 ms and
+335 ms `window_max` outliers are first frames), against the 44 ms median
+measured on the Android 9 Motorola; §5.1n is updated from gate §12's own run.
 
 Root cause, established by bisection on the S23 Ultra (`<dev-id-1>`,
 `out/bug_gray/bisect.sh` drop-one table): starting a session with the filter
