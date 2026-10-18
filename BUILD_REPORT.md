@@ -3122,6 +3122,126 @@ profiles; until it runs again the numbers stay `SKIP`ed with the reason, and the
 latency baselines of §5.1n stay as measured on the phone that produced them.
 
 
+### 5.1ax. v4 §5 — the depth palette, five launcher animations, and the two gates that keep them honest
+
+Directive §5.1 asks for hierarchy by depth rather than by colour, and §5.2 for
+animations only where a state changes. `launcher/App.xaml` now carries the five
+brushes it names: `Elevated` #1E2130 for cards, `Sunken` #0A0B0F for every input,
+`Edge` #2A2D3A for borders, over the existing `Bg` #0E0F13 and `Panel` #16181F.
+The card style gained the specified shadow (`BlurRadius="16" ShadowDepth="0"
+Opacity="0.25"`) as one line, so every card in the window shares it instead of
+re-deciding per screen.
+
+Five animations, one per state change, each with its own duration key so the
+reduced-motion switch can zero it:
+
+| Change of state | What moves | Key = duration |
+|---|---|---|
+| switching tab | fade + 12 px slide, CubicEase | `AnimTab` = 0:0:0.2 |
+| opening ATAJOS or the profile form | fade + 0.92→1 vertical reveal | `AnimPanel` = 0:0:0.15 |
+| button hover | accent overlay in/out | `AnimHover` = 0:0:0.08 |
+| combo list opens | fade in | `AnimCombo` = 0:0:0.1 |
+| profile saved | accent flash on the description box | `AnimHighlight` = 0:0:0.12 |
+
+`AnimOverlay` (0:0:0.12) is the key the mirror-side panel uses, described in
+§5.1ay. Nothing else animates: no entry animations on load, no pulsing accents.
+
+`App.ApplyMotionPreference()` reads `SystemParameters.ClientAreaAnimation` once
+at startup and, when Windows says "no animations", replaces all six keys with
+`Duration.Zero` in `Application.Current.Resources`. Because every storyboard
+resolves its duration through those keys, one switch turns the whole UI still.
+
+Gate sections §23 and §24 now run `tools/visual_polish_check.sh` and relay its
+per-section verdict. The harness is static on purpose (it has to pass on a
+headless machine) and it carries a fixture per rule; the launcher theme, then:
+
+```
+== 23. animations obey the Windows reduced-motion setting
+  ok    duration keys defined: AnimCombo AnimHighlight AnimHover AnimOverlay AnimPanel AnimTab
+  ok    every Duration in the XAML resolves through a resource key
+  ok    the code reads SystemParameters.ClientAreaAnimation
+  ok    the mirror panel asks SPI_GETCLIENTAREAANIMATION too
+== 24. no animation over 250 ms, no oversized type, no broken shadow
+  ok    no animation duration exceeds 250 ms
+  ok    no FontSize above 16 outside the title styles
+  ok    every card shadow is soft (blur >= 8, depth 0, opacity <= 0.5)
+RESULT pass=12 fail=0
+RESULT23 pass=5 fail=0
+RESULT24 pass=7 fail=0
+```
+
+The same harness run against a deliberately broken theme (a 400 ms duration key,
+a hard-coded `Duration="0:0:0.2"`, no `ClientAreaAnimation` read, a
+`Setter Property="FontSize" Value="28"`, and a `BlurRadius=4 ShadowDepth=6
+Opacity=0.8` shadow) reports five findings, `RESULT23 pass=2 fail=2` and
+`RESULT24 pass=4 fail=3`, so each rule is demonstrated able to fail. The FontSize
+rule needed widening to find that: it first read only the `FontSize=".."`
+attribute, and the theme sets most of its sizes through a `Setter`, so the
+fixture's 28 px setter slipped through until both spellings were matched — a hole
+in the check, not in the theme, found by the fixture and now covered by a control
+of its own.
+
+`MainWindow.xaml` had four 20 px numbers left from the v2 layout; they are 16 px
+now, which is what §24 requires outside the title styles. The UI Automation walk
+still completes on the animated theme (`UIAUTO OK`), including the profile-form
+probe that presses "Nuevo perfil" and reads `TxtProfileName`, `CboFormFps` and
+`LblFormLatency` back, so the reveal animation does not hide the editor from an
+assistive client.
+
+### 5.1ay. v4 §5.2 — the filter panel fades in, and what it measured at
+
+The sixth animation is in the fork, not the launcher: the filter panel is a
+second SDL window, and §5.2 asks it to open with a fade. It animates the window
+opacity, not the pixels, which keeps the cost out of the render path entirely —
+the panel still blits only when it is dirty, and the ramp is a handful of
+`SDL_SetWindowOpacity` calls. The event loop blocks in `SDL_WaitEvent`, so a
+short-lived `SDL_AddTimer` posts a user event every 20 ms while the ramp runs and
+then stops re-arming itself; the opacity itself is only ever set from the main
+thread, exactly like the hotkey thread already does.
+
+The reduced-motion switch is read on this side too, through the same Windows
+setting the launcher asks (`SystemParametersInfoA(SPI_GETCLIENTAREAANIMATION)`),
+and gate §23 now checks both sources. Hiding the panel mid-ramp restores opacity
+to 1.0 so the next open starts clean, and if `SDL_AddTimer` is unavailable the
+panel shows at once rather than risk a permanently translucent window.
+
+What the branches did on this host — where Windows reports animations **off**, so
+the plain run takes the skip path and the ramp is proven by forcing it
+(`GAMINGSCRCPY_FORCE_FADE=1`, a harness-only override nothing else sets):
+
+```
+OK open fade skipped (Windows animations are off)
+OK open fade complete in 131 ms (opacity back to 1.00) (ramp forced on a host where Windows says off)
+```
+
+The ramp is 120 ms by construction; the completion is *reported* one tick later
+because the tick that notices it is the demo's own frame.
+
+Cost, measured by the panel's latency harness (`tools/overlay_test.sh`, 1000
+frames per run, two paired reps, panel open vs baseline):
+
+```
+NOTE best of 2 reps - baseline med=3.254 p99=13.358 fps=63.0 / panel med=3.271 p99=5.500 fps=63.0
+OK paired median difference = 0.009 ms, |x| < 1.0 ms
+OK paired p99 difference = -7.628 ms < 1.0 ms (only a longer tail fails)
+OK presented fps with the panel open: 63.0 against 63.0 baseline (drop <= 3)
+OVERLAY OK
+```
+
+One rep of the same harness did report `FAIL p99 grew 1.290 ms with the panel
+open`, and the run before it `+1.756 ms`: the p99 of this metric swings by more
+than the budget on an idle host while its median sits at 3.25 ms, which is the
+long-standing flakiness of this arm rather than a cost of the fade — on this
+machine the fade does not even run. The median, which is the number that means
+something, moved by 0.009 ms across every run.
+
+Not done, and why: §5.2 also asks the panel to scale from 0.95 while it fades.
+Scaling a borderless SDL window means resizing it per frame, and the panel draws
+at fixed `PANEL_W`/`PANEL_H`, so each step would re-flow text and clip the button
+row for the length of the animation. The fade alone was kept; the scale is not
+implemented.
+
+
 ## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so

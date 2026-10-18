@@ -4,6 +4,8 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace GamingScrcpyLauncher;
 
@@ -875,11 +877,51 @@ public partial class MainWindow : Window
             : _cfg.DisplayName + " \u00b7 " + notes;
     }
 
+    // v4 \u00a75.2 a panel that only exists because it was asked for has to arrive
+    // that way: fade plus a small vertical expansion. The duration is read from
+    // the Anim* resource key rather than written here, and App zeroes those keys
+    // when Windows says "no animations", so this one lookup is what makes the
+    // whole launcher honour the setting.
+    internal static void Reveal(FrameworkElement el, string durationKey)
+    {
+        var dur = (Duration) Application.Current.Resources[durationKey]!;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        el.RenderTransformOrigin = new Point(0.5, 0);
+        el.RenderTransform = new ScaleTransform(1, 0.92);
+        el.Opacity = 0;
+        var sb = new Storyboard();
+        var fade = new DoubleAnimation(0, 1, dur) { EasingFunction = ease };
+        Storyboard.SetTarget(fade, el);
+        Storyboard.SetTargetProperty(fade, new PropertyPath("Opacity"));
+        var grow = new DoubleAnimation(0.92, 1.0, dur) { EasingFunction = ease };
+        Storyboard.SetTarget(grow, el);
+        Storyboard.SetTargetProperty(grow, new PropertyPath("RenderTransform.ScaleY"));
+        sb.Children.Add(fade);
+        sb.Children.Add(grow);
+        sb.Begin();
+    }
+
+    // v4 \u00a75.2 saved feedback: the description box is the thing a save actually
+    // changed, so it is the thing that flashes. Colour, not position -- the text
+    // must stay under the cursor while it says "this is now stored".
+    private void FlashProfileInfo()
+    {
+        var accent = (SolidColorBrush) Application.Current.Resources["Accent"]!;
+        var dim = (SolidColorBrush) Application.Current.Resources["FgDim"]!;
+        var dur = (Duration) Application.Current.Resources["AnimHighlight"]!;
+        var brush = new SolidColorBrush(accent.Color);
+        TxtProfileInfo.Foreground = brush;
+        var back = new ColorAnimation(dim.Color, dur)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+        brush.BeginAnimation(SolidColorBrush.ColorProperty, back);
+    }
+
     // A profile picked during a session takes effect when it is started again:
     // the running mirror is never restarted by the selector, and that has to be
     // said where the user is looking.
-    private void UpdateProfilePendingHint()
-    {
+    private void UpdateProfilePendingHint()    {
         if (!_ready)
         {
             return;
@@ -1035,7 +1077,11 @@ public partial class MainWindow : Window
         Log(Loc.T("LogNewProfile"));
     }
 
-    private void OpenProfileForm() => ProfileForm.Visibility = Visibility.Visible;
+    private void OpenProfileForm()
+    {
+        ProfileForm.Visibility = Visibility.Visible;
+        Reveal(ProfileForm, "AnimPanel");
+    }
 
     private void OnCloseProfileForm(object sender, RoutedEventArgs e) =>
         ProfileForm.Visibility = Visibility.Collapsed;
@@ -1117,6 +1163,7 @@ public partial class MainWindow : Window
         cfg.FilterProfiles = ProfileStore.HarvestFilterProfiles();
         ProfileStore.SaveProfile(cfg);
         RefreshProfiles(ProfileStore.SafeFileName(cfg.Name) + ".json");
+        FlashProfileInfo();
         Log(Loc.Format("LogProfileSaved", cfg.DisplayName));
         UpdateCommandPreview();
     }
@@ -1177,6 +1224,7 @@ public partial class MainWindow : Window
         cfg.FilterProfiles = ProfileStore.HarvestFilterProfiles();
         ProfileStore.SaveProfile(cfg);
         RefreshProfiles(ProfileStore.SafeFileName(cfg.Name) + ".json");
+        FlashProfileInfo();
         Log(Loc.Format("LogProfileSaved", cfg.Name));
         UpdateCommandPreview();
     }

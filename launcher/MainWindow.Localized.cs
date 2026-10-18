@@ -206,8 +206,12 @@ namespace GamingScrcpyLauncher
                 ShortcutsList.Build(ScGroups);
                 _shortcutsBuilt = true;
             }
-            ScPanel.Visibility = ScPanel.Visibility == Visibility.Visible
-                ? Visibility.Collapsed : Visibility.Visible;
+            var open = ScPanel.Visibility != Visibility.Visible;
+            ScPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            if (open)
+            {
+                Reveal(ScPanel, "AnimPanel");
+            }
         }
 
         // Profiles travel as one JSON array, so a machine can be set up by

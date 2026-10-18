@@ -780,6 +780,64 @@ case $stall_rc in
     *) bad "graceful failure: see the arms below"; echo "$stall" ;;
 esac
 
+# v4 §5.2 and §5.4 ask for two gate sections, and their rules are read from the
+# same files, so one static harness produces both verdicts and this gate relays
+# each of them under its own header. The harness counts its own rules per section
+# (RESULT23 / RESULT24) and carries a positive-control fixture for every rule,
+# which is what makes a green line here mean the pattern can still fail rather
+# than merely having never been tested. Nothing in it needs a display or a device,
+# so unlike the sections above this one has no SKIP path except a missing checkout.
+vp="$(bash "$ROOT/tools/visual_polish_check.sh" 2>&1)"; vp_rc=$?
+vpc=$(printf '%s' "$vp" | sed -e 's/\x1b\[[0-9;]*m//g')
+vp_section() { # n -> the lines the harness printed for that section, controls included
+    printf '%s\n' "$vpc" | awk -v s="$1" '
+        $0 ~ "^== " s "[.]" { f = 1; next }
+        /^== /              { f = 0 }
+        /^RESULT/           { f = 0 }
+        f || index($0, "§" s "]") { print }
+    '
+}
+vp_verdict() { # n -> "pass fail", empty when the harness printed no verdict
+    printf '%s' "$vpc" | sed -n "s/^RESULT$1 pass=\([0-9]*\) fail=\([0-9]*\).*/\1 \2/p" | head -1
+}
+
+vp_relay() { # n -> relay the section's own lines, then judge its counted verdict
+    local n="$1" got p f
+    while IFS= read -r line; do
+        case "$line" in
+            *"  ok    "*) ok "${line#*ok    }" ;;
+            *"  FAIL  "*) bad "${line#*FAIL  }" ;;
+        esac
+    done <<< "$(vp_section "$n")"
+    got=$(vp_verdict "$n")
+    if [ -z "$got" ]; then
+        bad "harness printed no RESULT$n verdict: section $n cannot be judged"
+        return
+    fi
+    read -r p f <<< "$got"
+    if [ "${f:-x}" != 0 ]; then
+        bad "section $n verdict says fail=$f"
+    elif [ "${p:-0}" -eq 0 ]; then
+        bad "section $n counted no passing rule: nothing was checked"
+    else
+        printf '  \033[33mnote\033[0m  %s\n' "section $n verdict: pass=$p fail=0 (harness exit $vp_rc)"
+    fi
+}
+
+head_ "23. reduced motion: every animation duration comes from a key the code can zero"
+if [ "$vp_rc" -eq 2 ]; then
+    printf '  \033[33mnote\033[0m  %s\n' "SKIP: $(printf '%s\n' "$vpc" | sed -n '1p')"
+else
+    vp_relay 23
+fi
+
+head_ "24. visual polish regression: no oversized type, shadow or animation"
+if [ "$vp_rc" -eq 2 ]; then
+    printf '  \033[33mnote\033[0m  %s\n' "SKIP: harness has no launcher sources to read"
+else
+    vp_relay 24
+fi
+
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

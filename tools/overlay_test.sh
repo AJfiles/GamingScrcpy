@@ -102,6 +102,33 @@ if [ -n "$line" ]; then
 else
     bad "the panel never logged its window"
 fi
+# v4 §5.2: the panel opens with a 120 ms opacity fade. What can be asserted
+# without a screen reader is that the ramp was reported -- completed, or skipped
+# because Windows says the user does not want animations. A fade that never
+# finished would leave the panel half transparent, and no pixel test of the
+# mirror can see that, because opacity is a window attribute, not a pixel.
+fade=$(grep -m1 'open fade' "$TMP/func.log")
+if [ -n "$fade" ]; then
+    ok "${fade##*filter-overlay: }"
+else
+    bad "the panel never reported its open fade (neither complete nor skipped)"
+fi
+# Which branch runs is decided by the host's own Windows setting, so the ramp is
+# proven by forcing it: the same code, the opposite answer from the switch. The
+# panel is opened by the toggle, not by --overlay-visible, which the client
+# refuses at startup on purpose (gate §22). On a host where animations are on,
+# the plain run above already takes this branch.
+GAMINGSCRCPY_FORCE_FADE=1 "$DEMO" "${ARGS[@]}" --frames=240 --overlay-toggle=40 \
+    > "$TMP/fade.log" 2>&1
+fade_rc=$?
+done_line=$(grep -m1 'open fade complete' "$TMP/fade.log")
+if [ -n "$done_line" ]; then
+    ok "${done_line##*filter-overlay: } (ramp forced on a host where Windows says off)"
+elif [ "$fade_rc" -ne 0 ]; then
+    bad "the forced-fade run exited $fade_rc"
+else
+    bad "the forced fade never reported completion (see the log)"
+fi
 for probe in 'reachable=yes' 'extra-mod-rejected=yes' 'window=live'; do
     if grep -q "$probe" "$TMP/func.log"; then
         ok "panel $probe"

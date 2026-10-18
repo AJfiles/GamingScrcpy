@@ -22,8 +22,15 @@ set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 src=$root/launcher
 pass=0; fail=0
-ok()  { printf '  \033[32mok\033[0m    %s\n' "$1"; pass=$((pass+1)); }
-bad() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
+# The directive asks for two gate sections out of this one harness, and a gate
+# relay cannot split a colored block by its header. So each rule tallies into its
+# own section and the two verdicts are printed as machine-readable lines.
+sec=23; p23=0; f23=0; p24=0; f24=0
+ok()  { printf '  \033[32mok\033[0m    %s\n' "$1"; pass=$((pass+1))
+        if [ "$sec" -eq 23 ]; then p23=$((p23+1)); else p24=$((p24+1)); fi; }
+bad() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1))
+        if [ "$sec" -eq 23 ]; then f23=$((f23+1)); else f24=$((f24+1)); fi; }
+note(){ printf '  \033[33mnote\033[0m  %s\n' "$1"; }
 head_() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
 
 [ -d "$src" ] || { echo "SKIP  no launcher sources at $src"; exit 2; }
@@ -31,6 +38,7 @@ xaml=$(find "$src" -maxdepth 2 -name '*.xaml' -not -path '*/obj/*' -not -path '*
 [ -n "$xaml" ] || { echo "SKIP  no XAML to inspect"; exit 2; }
 
 # ---- §23 reduced motion ------------------------------------------------------
+sec=23
 head_ "23. animations obey the Windows reduced-motion setting"
 keys=$(grep -ohE 'x:Key="(Anim[A-Za-z]*)"' $xaml 2>/dev/null \
     | sed 's/.*x:Key="//; s/"//' | sort -u)
@@ -53,8 +61,22 @@ if grep -rq "SystemParameters.ClientAreaAnimation" "$src" --include=*.cs; then
 else
     bad "nothing reads SystemParameters.ClientAreaAnimation, so the keys are never zeroed"
 fi
+# The filter panel is a second UI in another process, in SDL, so the same switch
+# has to be asked there too. Only checked when the fork sources are present: the
+# launcher ships on machines that never built the C tree.
+fork=$root/workspace/scrcpy/app/src/overlay.c
+if [ -f "$fork" ]; then
+    if grep -q "SPI_GETCLIENTAREAANIMATION" "$fork"; then
+        ok "the mirror panel asks SPI_GETCLIENTAREAANIMATION too"
+    else
+        bad "the mirror panel animates without asking Windows"
+    fi
+else
+    note "no fork sources at $fork: the panel's reduced-motion switch unchecked"
+fi
 
 # ---- §24 polish regression ---------------------------------------------------
+sec=24
 head_ "24. no animation over 250 ms, no oversized type, no broken shadow"
 # durations are in seconds inside the resource keys, so read the values
 over=0
@@ -75,7 +97,9 @@ else
     bad "$over animation(s) exceed 250 ms"
 fi
 
-big=$(grep -nE 'FontSize="(1[7-9]|[2-9][0-9])"' $xaml 2>/dev/null \
+# Both spellings count: the theme sets most of its sizes through a Setter, so a
+# rule that only read the FontSize=".." attribute would let a 28 px Setter through.
+big=$(grep -nE 'FontSize="(1[7-9]|[2-9][0-9])"|Property="FontSize"[[:space:]]+Value="(1[7-9]|[2-9][0-9])"' $xaml 2>/dev/null \
     | grep -viE 'Title|Header|Brand|Hero')
 if [ -z "$big" ]; then
     ok "no FontSize above 16 outside the title styles"
@@ -95,7 +119,10 @@ fi
 
 # ---- positive controls -------------------------------------------------------
 # Each rule is run against a fixture that breaks exactly that rule. Without this
-# block a typo in a pattern would report green forever.
+# block a typo in a pattern would report green forever. Each control is tagged
+# with the section whose rule it tests, both so the tallies land in the right
+# verdict and so the gate relay -- which reads one section at a time -- cannot
+# lose the line that proves the check can fail.
 head_ "controls: each rule must be able to fail"
 fx=$(mktemp -d)
 trap 'rm -rf "$fx"' EXIT
@@ -109,6 +136,7 @@ cat > "$fx/Noisy.xaml" <<'EOF'
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <TextBlock FontSize="28" Text="oversized"/>
+  <Style TargetType="TextBlock"><Setter Property="FontSize" Value="22"/></Style>
   <Border Effect="{DropShadowEffect BlurRadius=2 ShadowDepth=8 Opacity=0.9}"/>
   <DoubleAnimation Duration="0:0:0.4" Storyboard.TargetProperty="Opacity"/>
 </Grid>
@@ -118,28 +146,37 @@ check_over() { # file -> prints the number of durations over 250 ms
         | sed -E 's/x:Key="([^"]*)".*>(.*)/\1 \2/' \
         | awk '{ n = split($2, p, ":"); if (p[n] * 1000 > 250) c++ } END { print c + 0 }'
 }
+sec=24
 if [ "$(check_over "$fx/Slow.xaml")" -eq 1 ]; then
-    ok "the 500 ms fixture is caught by the duration rule"
+    ok "[control §24] the 500 ms fixture is caught by the duration rule"
 else
-    bad "the 500 ms fixture slipped through: the duration rule cannot fail"
+    bad "[control §24] the 500 ms fixture slipped through: the duration rule cannot fail"
 fi
 if grep -qE 'FontSize="(1[7-9]|[2-9][0-9])"' "$fx/Noisy.xaml"; then
-    ok "the FontSize=28 fixture is caught"
+    ok "[control §24] the FontSize=28 fixture is caught"
 else
-    bad "the FontSize rule cannot fail"
+    bad "[control §24] the FontSize rule cannot fail"
+fi
+if grep -qE 'Property="FontSize"[[:space:]]+Value="(1[7-9]|[2-9][0-9])"' "$fx/Noisy.xaml"; then
+    ok "[control §24] the Setter FontSize=22 fixture is caught"
+else
+    bad "[control §24] the Setter form of an oversized font slips through"
 fi
 if grep -nE 'DropShadowEffect' "$fx/Noisy.xaml" \
    | grep -qvE 'BlurRadius="([89]|[1-9][0-9]+)"[^>]*ShadowDepth="0"[^>]*Opacity="0?\.[0-4][0-9]*"'; then
-    ok "the blur=2/opacity=0.9 fixture is caught"
+    ok "[control §24] the blur=2/opacity=0.9 fixture is caught"
 else
-    bad "the shadow rule cannot fail"
+    bad "[control §24] the shadow rule cannot fail"
 fi
+sec=23
 if grep -qE 'Duration="0:0:' "$fx/Noisy.xaml" && \
    ! grep -qE 'DynamicResource|StaticResource' "$fx/Noisy.xaml"; then
-    ok "the hard-coded Duration fixture is caught"
+    ok "[control §23] the hard-coded Duration fixture is caught"
 else
-    bad "the reduced-motion rule cannot fail"
+    bad "[control §23] the reduced-motion rule cannot fail"
 fi
 
 printf '\nRESULT pass=%s fail=%s\n' "$pass" "$fail"
+printf 'RESULT23 pass=%s fail=%s\n' "$p23" "$f23"
+printf 'RESULT24 pass=%s fail=%s\n' "$p24" "$f24"
 [ "$fail" -eq 0 ] || exit 1

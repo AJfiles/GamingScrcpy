@@ -23,6 +23,25 @@
         <SolidColorBrush x:Key="StopBg" Color="#FF2A1A22"/>
         <SolidColorBrush x:Key="ComboHi" Color="#FF27455F"/>
 
+        <!-- v4 §5.1 depth, not hue: a card is lighter than the panel it sits on,
+             an input is darker than both, and the line between them is one step
+             above the surface. Four greys that mean "where am I in the layout". -->
+        <SolidColorBrush x:Key="Elevated" Color="#FF1E2130"/>
+        <SolidColorBrush x:Key="Sunken" Color="#FF0A0B0F"/>
+        <SolidColorBrush x:Key="Edge" Color="#FF2A2D3A"/>
+
+        <!-- v4 §5.2 one duration per state change, and only these. Nothing here
+             is longer than 250 ms because past that an interface starts feeling
+             slow rather than responsive; App zeroes all of them when Windows has
+             animations turned off, which is why no animation in this project
+             writes its own Duration. -->
+        <Duration x:Key="AnimTab">0:0:0.200</Duration>
+        <Duration x:Key="AnimPanel">0:0:0.150</Duration>
+        <Duration x:Key="AnimOverlay">0:0:0.120</Duration>
+        <Duration x:Key="AnimHover">0:0:0.080</Duration>
+        <Duration x:Key="AnimCombo">0:0:0.100</Duration>
+        <Duration x:Key="AnimHighlight">0:0:0.200</Duration>
+
         <FontFamily x:Key="Mono">Consolas</FontFamily>
         <Thickness x:Key="Gap">8</Thickness>
 
@@ -62,7 +81,7 @@
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="{StaticResource Panel2}"/>
+            <Setter Property="Background" Value="{StaticResource Sunken}"/>
             <Setter Property="Foreground" Value="{StaticResource Fg}"/>
             <Setter Property="Height" Value="26"/>
             <Setter Property="Template">
@@ -73,8 +92,8 @@
                                           IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
-                                        <Border Background="{StaticResource Panel2}"
-                                                BorderBrush="{StaticResource Line}"
+                                        <Border Background="{StaticResource Sunken}"
+                                                BorderBrush="{StaticResource Edge}"
                                                 BorderThickness="1" CornerRadius="6"/>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
@@ -86,19 +105,51 @@
                             <Path HorizontalAlignment="Right" VerticalAlignment="Center"
                                   Margin="0,0,8,0" Data="M 0 0 L 4 4 L 8 0 Z"
                                   Fill="{StaticResource FgDim}" IsHitTestVisible="False"/>
+                            <!-- the list is a decision surface, not a decoration: it
+                                 fades in over 100 ms so the eye lands on the options
+                                 instead of a box appearing mid-air. PopupAnimation is
+                                 off because WPF's own slide is system-timed and would
+                                 ignore the reduced-motion key. -->
                             <Popup Placement="Bottom" AllowsTransparency="True" Focusable="False"
-                                   IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Slide">
-                                <Border Background="{StaticResource Panel2}"
-                                        BorderBrush="{StaticResource Line}" BorderThickness="1"
-                                        CornerRadius="6"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="None">
+                                <Border x:Name="DropDown" Background="{StaticResource Elevated}"
+                                        BorderBrush="{StaticResource Edge}" BorderThickness="1"
+                                        CornerRadius="6" Opacity="0"
                                         MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                         MaxHeight="300">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.25"/>
+                                    </Border.Effect>
                                     <ScrollViewer>
                                         <StackPanel IsItemsHost="True" Margin="4"/>
                                     </ScrollViewer>
                                 </Border>
                             </Popup>
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DropDown"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="1"
+                                                             Duration="{StaticResource AnimCombo}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DropDown"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0"
+                                                             Duration="{StaticResource AnimHover}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -124,9 +175,9 @@
             </Setter>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource Panel2}"/>
+            <Setter Property="Background" Value="{StaticResource Sunken}"/>
             <Setter Property="Foreground" Value="{StaticResource Fg}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Edge}"/>
             <Setter Property="CaretBrush" Value="{StaticResource Fg}"/>
             <Setter Property="Height" Value="26"/>
             <Setter Property="Padding" Value="6,0"/>
@@ -151,13 +202,43 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                    CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                            <!-- v4 §5.2 hover: an accent wash that fades in over
+                                 80 ms. It is a separate layer rather than a colour
+                                 change on the border because a setter cannot ease,
+                                 and because the pointer is telling you "this is
+                                 clickable", not "this is selected": the focus
+                                 trigger below keeps its own, stronger sign. -->
+                            <Border x:Name="Hv" Background="{StaticResource Accent}"
+                                    CornerRadius="6" Opacity="0" IsHitTestVisible="False"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="UIElement.MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hv"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.14"
+                                                         Duration="{StaticResource AnimHover}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="UIElement.MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Hv"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0"
+                                                         Duration="{StaticResource AnimHover}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="BorderBrush"
                                         Value="{StaticResource Accent}"/>
@@ -230,9 +311,52 @@
             <Setter Property="Margin" Value="0,8,0,0"/>
         </Style>
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource Panel}"/>
+            <!-- v4 §5.1/§5.2: a card is the one surface that is raised above its
+                 panel, so it is the one thing that gets a shadow, and the
+                 shadow has no offset, because a floating panel that points at a
+                 light source in the corner of a window is decoration, not depth -->
+            <Setter Property="Background" Value="{StaticResource Elevated}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Edge}"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="10"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.25"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- v4 §5.2 the body of a tab as it becomes visible: the previous tab is
+             already gone by the time WPF loads the new one, so this is the only
+             place a section change can be signalled. Twelve pixels and a fade,
+             enough to say "this is new content", not enough to make you wait.
+             FrameworkElement rather than ScrollViewer because the seven tab roots
+             are not one type: three are grids, four scroll. -->
+        <Style x:Key="TabBody" TargetType="FrameworkElement">
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <TranslateTransform X="12"/>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                             From="0" To="1"
+                                             Duration="{StaticResource AnimTab}"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.X"
+                                             From="12" To="0"
+                                             Duration="{StaticResource AnimTab}">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseOut"/>
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Style.Triggers>
         </Style>
     </Application.Resources>
 </Application>

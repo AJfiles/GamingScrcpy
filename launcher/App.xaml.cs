@@ -30,6 +30,26 @@ public partial class App : Application
             return;
         }
         base.OnStartup(e);
+        ApplyMotionPreference();
+    }
+
+    // v4 §5.2 gate §23: an animation the user cannot turn off is not a polish
+    // detail but an accessibility defect, and Windows already exposes the switch
+    // ("Show animations in Windows"). Every duration in the theme lives under an
+    // Anim* key, so honouring the setting is this loop and nothing else: the
+    // storyboards still run, they just finish at once.
+    private static void ApplyMotionPreference()
+    {
+        if (SystemParameters.ClientAreaAnimation)
+        {
+            return;
+        }
+        var zero = new Duration(TimeSpan.Zero);
+        foreach (var key in new[] { "AnimTab", "AnimPanel", "AnimOverlay",
+                                    "AnimHover", "AnimCombo", "AnimHighlight" })
+        {
+            Current.Resources[key] = zero;
+        }
     }
 
     // v4 §6.1: the on-device profile sweep has to run the command line a session

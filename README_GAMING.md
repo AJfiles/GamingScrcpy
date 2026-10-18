@@ -341,6 +341,15 @@ filter engine alone exceeds that (5.466 ms with no panel at all), so the gate
 reports the cap as a measured NOTE with both numbers instead of pretending the
 cap passed or degrading the feature to a launcher panel.
 
+Since v4 the panel fades in over 120 ms when it opens. It animates the *window
+opacity*, not the pixels, so the ramp costs a handful of `SDL_SetWindowOpacity`
+calls and no repaint, and it is skipped entirely when Windows says you do not
+want animations (Settings → Accessibility → Visual effects → animation effects).
+`tools/overlay_test.sh` asserts both halves: that the panel reported its fade
+outcome, and — with `GAMINGSCRCPY_FORCE_FADE=1`, which nothing else sets — that
+the ramp reaches full opacity. Measured on this host: median 0.009 ms between the
+panel-open run and the baseline, `open fade complete in 131 ms`.
+
 **Recording while mirroring is a different matter: it is nearly free.** Measured
 with `recorderintegrity --bench` on 1280x720 H.264 at ~30 kB per packet, pushed
 at the stream rate against a live recorder writing to disk
@@ -762,6 +771,15 @@ FFmpeg-based consumers.
   (labels, combo items, tooltips, status text, dialogs, the run log and the
   command preview) comes from one table in `launcher/Loc.cs`, and the choice is
   remembered. Gate section 15 fails if a key is missing in either language.
+* **Appearance** — depth rather than colour count: app background #0E0F13,
+  surfaces #16181F, elevated cards #1E2130 with one soft shadow, sunken inputs
+  #0A0B0F, borders #2A2D3A. The state changes are animated and nothing else is:
+  a tab fade with a 12 px slide (200 ms), a panel reveal (150 ms), button hover
+  (80 ms), the combo list (100 ms) and an accent flash when a profile is saved.
+  All six durations come from resource keys, and if Windows has animation effects
+  switched off (Settings → Accessibility → Visual effects) the launcher zeros
+  them and the filter panel skips its 120 ms open fade, so the choice is yours,
+  not the app's. Gate sections 23 and 24 keep both in line.
 * **Shortcut list** — **ATAJOS** on the Quick tab opens the runtime shortcuts as
   a table instead of a wall of text: a keycap-styled monospaced combination
   (`Super/Alt+F1`, wide enough for `Super+Alt+F12`), a short action, and a grey

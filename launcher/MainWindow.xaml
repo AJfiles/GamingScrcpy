@@ -162,7 +162,7 @@
             <TabControl x:Name="MainTabs" Grid.Column="0" Background="Transparent"
                         BorderBrush="{StaticResource Line}">
                 <TabItem Header="{DynamicResource TabQuick}">
-                    <Grid Margin="8">
+                    <Grid Margin="8" Style="{StaticResource TabBody}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -232,22 +232,22 @@
                                 <StackPanel Margin="0,0,8,0">
                                     <TextBlock Text="{DynamicResource LblLiveLatency}" Style="{StaticResource Hint}"/>
                                     <TextBlock x:Name="TxtPerfLatency" Style="{StaticResource Num}"
-                                               FontSize="20" Text="--"/>
+                                               FontSize="16" Text="--"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,8,0">
                                     <TextBlock Text="{DynamicResource LblLiveFps}" Style="{StaticResource Hint}"/>
                                     <TextBlock x:Name="TxtPerfFps" Style="{StaticResource Num}"
-                                               FontSize="20" Text="--"/>
+                                               FontSize="16" Text="--"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,8,0">
                                     <TextBlock Text="{DynamicResource LblLiveBitrate}" Style="{StaticResource Hint}"/>
                                     <TextBlock x:Name="TxtPerfVideo" Style="{StaticResource Num}"
-                                               FontSize="20" Text="--"/>
+                                               FontSize="16" Text="--"/>
                                 </StackPanel>
                                 <StackPanel>
                                     <TextBlock Text="{DynamicResource LblLiveAudio}" Style="{StaticResource Hint}"/>
                                     <TextBlock x:Name="TxtPerfAudio" Style="{StaticResource Num}"
-                                               FontSize="20" Text="--"/>
+                                               FontSize="16" Text="--"/>
                                 </StackPanel>
                             </UniformGrid>
                             <TextBlock Text="{DynamicResource HintPerf}" Style="{StaticResource Hint}"/>
@@ -259,7 +259,8 @@
                 </TabItem>
 
                 <TabItem Header="{DynamicResource TabCapture}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource TabBody}">
                         <StackPanel Margin="8">
                             <TextBlock Text="{DynamicResource SecCapture}" Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,8"/>
@@ -342,7 +343,8 @@
                 </TabItem>
 
                 <TabItem Header="{DynamicResource TabPresentation}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource TabBody}">
                         <StackPanel Margin="8">
                             <TextBlock Text="{DynamicResource SecHost}" Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,8"/>
@@ -458,7 +460,7 @@
                 </TabItem>
 
                 <TabItem Header="{DynamicResource TabFilters}">
-                    <StackPanel Margin="8">
+                    <StackPanel Margin="8" Style="{StaticResource TabBody}">
                         <TextBlock Text="{DynamicResource SecFilters}" Style="{StaticResource SectionHeader}"
                                    Margin="0,0,0,8"/>
                         <WrapPanel Margin="0,0,0,8">
@@ -590,7 +592,8 @@
                 </TabItem>
 
                 <TabItem Header="{DynamicResource TabRecorder}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource TabBody}">
                         <StackPanel Margin="8">
                             <TextBlock Text="{DynamicResource SecBridge}" Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,8"/>
@@ -674,7 +677,8 @@
                 </TabItem>
 
                 <TabItem Header="{DynamicResource TabControl}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource TabBody}">
                         <Grid Margin="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="150"/>
@@ -739,7 +743,8 @@
                 </TabItem>
 
                 <TabItem x:Name="TabAdvancedItem" Header="{DynamicResource TabAdvanced}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Style="{StaticResource TabBody}">
                         <StackPanel Margin="8">
                             <TextBlock Text="{DynamicResource HintAdvanced}" Style="{StaticResource Hint}"/>
                             <TextBlock Text="{DynamicResource SecProfiles}" Style="{StaticResource SectionHeader}"/>
