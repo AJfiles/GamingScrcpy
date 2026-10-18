@@ -397,6 +397,12 @@ struct scrcpy_options {
     uint8_t game_bridge_filter;     // enum sc_bridge_filter
     uint8_t game_window_filter;     // enum sc_window_filter
     bool game_filter_overlay;       // real-time filter panel window
+    // ms to wait for the first presented frame before declaring the session
+    // stalled. Both fields are needed: the struct is zero-initialized, so
+    // "not given" and "--game-stall-timeout=0" would otherwise look identical
+    // and the default could not be on.
+    bool game_stall_timeout_given;
+    unsigned game_stall_timeout_ms;
     bool game_overlay_visible;      // open it at start instead of on hotkey
     const char *game_overlay_hotkey;    // "super+alt+f"
     const char *game_overlay_profiles;  // filter profile file

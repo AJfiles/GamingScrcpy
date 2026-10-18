@@ -859,6 +859,15 @@ aoa_complete:
                 .borderless_fullscreen = options->game_borderless_fullscreen,
                 .low_latency = options->game_low_latency,
                 .telemetry_log = options->game_telemetry_log,
+                // on unless the user said otherwise: a session that never
+                // shows a frame must end by itself, not hang (v4 §1.3).
+                // 5000 ms is well past the ~1.5 s the S23 Ultra takes here.
+                // Never armed without video playback: --no-playback records
+                // without ever painting, so the watchdog would kill it.
+                .stall_timeout_ms = options->video_playback
+                                  ? (options->game_stall_timeout_given
+                                     ? options->game_stall_timeout_ms : 5000)
+                                  : 0,
                 .cursor_autohide_ms = options->game_cursor_autohide_ms,
                 .touch_visualizer = options->game_touch_visualizer,
                 .always_on_top = options->always_on_top,

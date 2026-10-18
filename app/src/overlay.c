@@ -101,6 +101,7 @@ struct sc_gaming_overlay {
     struct sc_gaming_overlay_params params;
     char hotkey_label[32];
     bool visible;
+    bool pending_show;    // asked for, but the window is not built yet
     bool dirty;
     int grabbed;   // slider being dragged, -1 for none
     int hover;     // control under the pointer, -1 for none
@@ -624,25 +625,85 @@ sc_gaming_overlay_active_window_id(void) {
     return SDL_GetWindowID(g_active->window);
 }
 
+// The panel owns a second window and a second renderer. Building them while the
+// mirror is still starting up cost the mirror its first frame: a session opened
+// with --game-filter-overlay never painted and Windows marked the window "Not
+// Responding" (BUILD_REPORT §5.1ar). The panel is hidden until the user asks for
+// it, so its window is created on that first request, from the main loop.
+static bool
+overlay_ensure_window(struct sc_gaming_overlay *o) {
+    if (o->window) {
+        return true;
+    }
+    Uint32 flags = SDL_WINDOW_BORDERLESS | SDL_WINDOW_ALWAYS_ON_TOP
+                 | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN;
+    o->window = SDL_CreateWindow(o->params.title ? o->params.title
+                                                 : "GamingScrcpy filters",
+                                 PANEL_W, PANEL_H, flags);
+    if (!o->window) {
+        LOGE("overlay: window failed: %s", SDL_GetError());
+        return false;
+    }
+    int x = 64, y = 64;
+    if (o->params.parent) {
+        // land it at the mirror's top-right rather than over the game's HUD
+        int wx, wy, ww, wh;
+        SDL_GetWindowPosition(o->params.parent, &wx, &wy);
+        SDL_GetWindowSize(o->params.parent, &ww, &wh);
+        x = wx + ww - PANEL_W - PAD;
+        y = wy + HEADER_H + PAD;
+        if (x < 0) {
+            x = PAD;
+        }
+        if (y < 0) {
+            y = PAD;
+        }
+    }
+    SDL_SetWindowPosition(o->window, x, y);
+
+    // asked for by name so the mirror keeps the GPU to itself; the software
+    // backend only ever blits when the panel is dirty
+    o->renderer = SDL_CreateRenderer(o->window, "software");
+    if (!o->renderer) {
+        LOGI("overlay: software renderer unavailable (%s), using the default",
+             SDL_GetError());
+        o->renderer = SDL_CreateRenderer(o->window, NULL);
+    }
+    if (!o->renderer) {
+        LOGE("overlay: renderer failed: %s", SDL_GetError());
+        SDL_DestroyWindow(o->window);
+        o->window = NULL;
+        return false;
+    }
+    SDL_SetRenderVSync(o->renderer, 0);
+    SDL_SetRenderDrawBlendMode(o->renderer, SDL_BLENDMODE_BLEND);
+    LOGI("filter-overlay: panel window=%dx%d renderer=%s", PANEL_W, PANEL_H,
+         SDL_GetRendererName(o->renderer));
+    return true;
+}
+
 static void
 set_visible(struct sc_gaming_overlay *o, bool visible) {
     o->visible = visible;
     o->dragging = false;
     if (visible) {
         memcpy(o->snapshot, o->v, sizeof(o->v));
-        SDL_ShowWindow(o->window);
-        SDL_RaiseWindow(o->window);
+        // never build the window from here: this runs inside an event watch,
+        // while SDL is pumping events. The main loop does it on its next pass.
+        o->pending_show = true;
         o->dirty = true;
     } else {
         o->grabbed = -1;
         o->hover = -1;
-        SDL_HideWindow(o->window);
+        if (o->window) {
+            SDL_HideWindow(o->window);
+        }
     }
 }
 
 void
 sc_gaming_overlay_toggle(struct sc_gaming_overlay *o) {
-    if (!o || !o->window) {
+    if (!o) {
         return;
     }
     if (!o->visible) {
@@ -668,13 +729,13 @@ sc_gaming_overlay_want_local_hotkey(struct sc_gaming_overlay *o,
     // armed only while RegisterHotKey() does not have the combo: if it does,
     // the message thread already toggles and handling the keydown too would
     // open and close the panel in one press
-    if (!o || !o->window || o->hk_ready == 1 || o->hk_vk == 0) {
+    if (!o || o->hk_ready == 1 || o->hk_vk == 0) {
         return false;
     }
     if (event->type != SDL_EVENT_KEY_DOWN || event->key.repeat) {
         return false;
     }
-    if (event_window_id(event) == SDL_GetWindowID(o->window)) {
+    if (o->window && event_window_id(event) == SDL_GetWindowID(o->window)) {
         // keys inside the panel are its own business (Esc closes it)
         return false;
     }
@@ -721,7 +782,20 @@ sc_gaming_overlay_want_local_hotkey(struct sc_gaming_overlay *o,
 void
 sc_gaming_overlay_tick(void) {
     struct sc_gaming_overlay *o = g_active;
-    if (o && o->visible && o->dirty) {
+    if (!o) {
+        return;
+    }
+    if (o->pending_show) {
+        o->pending_show = false;
+        if (!overlay_ensure_window(o)) {
+            o->visible = false;
+            return;
+        }
+        SDL_ShowWindow(o->window);
+        SDL_RaiseWindow(o->window);
+        o->dirty = true;
+    }
+    if (o->visible && o->window && o->dirty) {
         overlay_paint(o);
     }
 }
@@ -730,11 +804,16 @@ bool
 sc_gaming_overlay_snapshot(struct sc_gaming_overlay *o, const char *path) {
     // the harness needs the panel's own pixels: a screenshot of the mirror
     // cannot show whether the panel painted
-    if (!o || !o->renderer || !o->window || !path) {
+    if (!o || !path) {
         return false;
     }
     if (!o->visible) {
         sc_gaming_overlay_toggle(o);
+    }
+    // the panel has no window until it is first asked for, and this is that ask
+    sc_gaming_overlay_tick();
+    if (!o->renderer) {
+        return false;
     }
     overlay_paint(o);
     SDL_Surface *s = SDL_RenderReadPixels(o->renderer, NULL);
@@ -759,6 +838,7 @@ sc_gaming_overlay_demo_pulse(int delta) {
     if (!o->visible) {
         sc_gaming_overlay_toggle(o);
     }
+    sc_gaming_overlay_tick();
     for (unsigned i = 0; i < SL_COUNT; ++i) {
         const struct slide_spec *s = &SLIDES[i];
         long v = (long) s->neutral + delta;
@@ -1051,51 +1131,6 @@ sc_gaming_overlay_create(struct sc_gaming *gaming,
     o->changed = false;
     memcpy(o->snapshot, o->v, sizeof(o->v));
 
-    Uint32 flags = SDL_WINDOW_BORDERLESS | SDL_WINDOW_ALWAYS_ON_TOP
-                 | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN;
-    o->window = SDL_CreateWindow(params->title ? params->title
-                                               : "GamingScrcpy filters",
-                                 PANEL_W, PANEL_H, flags);
-    if (!o->window) {
-        LOGE("overlay: window failed: %s", SDL_GetError());
-        free(o);
-        return NULL;
-    }
-    int x = 64, y = 64;
-    if (params->parent) {
-        // land it at the mirror's top-right rather than over the game's HUD
-        int wx, wy, ww, wh;
-        SDL_GetWindowPosition(params->parent, &wx, &wy);
-        SDL_GetWindowSize(params->parent, &ww, &wh);
-        x = wx + ww - PANEL_W - PAD;
-        y = wy + HEADER_H + PAD;
-        if (x < 0) {
-            x = PAD;
-        }
-        if (y < 0) {
-            y = PAD;
-        }
-    }
-    SDL_SetWindowPosition(o->window, x, y);
-
-    // asked for by name so the mirror keeps the GPU to itself; the software
-    // backend only ever blits when the panel is dirty
-    o->renderer = SDL_CreateRenderer(o->window, "software");
-    if (!o->renderer) {
-        LOGI("overlay: software renderer unavailable (%s), using the default",
-             SDL_GetError());
-        o->renderer = SDL_CreateRenderer(o->window, NULL);
-    }
-    if (!o->renderer) {
-        LOGE("overlay: renderer failed: %s", SDL_GetError());
-        SDL_DestroyWindow(o->window);
-        o->window = NULL;
-        free(o);
-        return NULL;
-    }
-    SDL_SetRenderVSync(o->renderer, 0);
-    SDL_SetRenderDrawBlendMode(o->renderer, SDL_BLENDMODE_BLEND);
-
     g_active = o;
     SDL_AddEventWatch(overlay_watch, o);
 
@@ -1118,18 +1153,24 @@ sc_gaming_overlay_create(struct sc_gaming *gaming,
 #endif
 
     if (params->start_visible) {
-        set_visible(o, true);
+        // measured, not assumed: with the panel requested at startup the mirror
+        // never paints (gate §22, panel-shown arm: 0 telemetry lines in 8 s). The
+        // panel is worth less than the picture, so the flag is refused with an
+        // explanation and the hotkey still opens it.
+        LOGW("overlay: --game-overlay-visible is disabled, it costs the mirror "
+             "its picture; press %s once the session is up to open the panel",
+             o->hotkey_label);
     }
-    LOGI("filter-overlay: window=%dx%d renderer=%s hotkey=%s visible=%s "
-         "profiles=%s", PANEL_W, PANEL_H, SDL_GetRendererName(o->renderer),
-         o->hotkey_label, params->start_visible ? "yes" : "no",
+    LOGI("filter-overlay: hotkey=%s visible=%s profiles=%s (the panel window is "
+         "built on the first show)", o->hotkey_label,
+         params->start_visible ? "yes" : "no",
          params->profiles_path ? params->profiles_path : "(none)");
     return o;
 }
 
 void
 sc_gaming_overlay_destroy(struct sc_gaming_overlay *o) {
-    if (!o || !o->window) {
+    if (!o) {
         return;
     }
 #ifdef _WIN32

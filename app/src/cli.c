@@ -135,6 +135,7 @@ enum {
     OPT_GAME_FILTER_OVERLAY,
     OPT_GAME_OVERLAY_VISIBLE,
     OPT_GAME_OVERLAY_HOTKEY,
+    OPT_GAME_STALL_TIMEOUT,
     OPT_GAME_FILTER_PROFILES,
     OPT_GAME_OVERLAY_ENGLISH,
 };
@@ -267,6 +268,18 @@ static const struct sc_option options[] = {
         .text = "Disable presentation vsync for the lowest host display "
                 "latency (may tear; recommended together with "
                 "--render-driver=direct3d11).",
+    },
+    {
+        .longopt_id = OPT_GAME_STALL_TIMEOUT,
+        .longopt = "game-stall-timeout",
+        .argdesc = "ms",
+        .text = "Give up loudly instead of hanging: if the mirror window has "
+                "not shown its first decoded frame this many milliseconds "
+                "after it opened, log 'video-stalled', end the session with a "
+                "failure exit code and never leave a grey 'Not Responding' "
+                "window behind. Default is 5000; 'off' disables it. Only the "
+                "first frame is watched: a paused phone screen stops "
+                "producing frames legitimately and must not be killed.",
     },
     {
         .longopt_id = OPT_GAME_FILTER_OVERLAY,
@@ -3010,6 +3023,21 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
             case OPT_GAME_FILTER_OVERLAY:
                 opts->game_filter_overlay = true;
                 break;
+            case OPT_GAME_STALL_TIMEOUT: {
+                opts->game_stall_timeout_given = true;
+                if (!strcmp(optarg, "off")) {
+                    opts->game_stall_timeout_ms = 0;
+                    break;
+                }
+                char *end = NULL;
+                unsigned long v = strtoul(optarg, &end, 10);
+                if (!end || *end || v > 0x7fffffffUL) {
+                    LOGE("Invalid value for --game-stall-timeout: %s", optarg);
+                    return false;
+                }
+                opts->game_stall_timeout_ms = (unsigned) v;
+                break;
+            }
             case OPT_GAME_OVERLAY_VISIBLE:
                 opts->game_overlay_visible = true;
                 break;

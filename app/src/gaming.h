@@ -130,6 +130,10 @@ struct sc_gaming_params {
     const char *overlay_hotkey;    // "super+alt+f"; NULL = the same default
     const char *overlay_profiles;  // profile file; NULL = nothing to save to
     bool overlay_spanish;          // label language of the panel itself
+    // v4 §1.3: the grey-window failure mode is a session whose mirror never
+    // presents a first frame. Give up loudly instead of hanging: milliseconds
+    // to wait for that first frame, 0 = never give up.
+    unsigned stall_timeout_ms;
 };
 
 struct sc_gaming {
@@ -137,6 +141,11 @@ struct sc_gaming {
 
     SDL_Window *window;
     SDL_Renderer *renderer;
+
+    // --- first-frame watchdog ---
+    SDL_Thread *stall_thread;
+    SDL_AtomicInt stall_seen;   // set by the render path on the first frame
+    SDL_AtomicInt stall_stop;   // set while the session is being torn down
 
     // --- OSD ---
     SDL_Surface *osd_surface;

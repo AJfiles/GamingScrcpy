@@ -21,6 +21,10 @@
 #include "util/log.h"
 #include "util/memory.h"
 #include "util/tick.h"
+#include "events.h"
+
+static int
+stall_watchdog_run(void *userdata);
 
 #ifdef _WIN32
 # include <windows.h>
@@ -1448,8 +1452,62 @@ sc_gaming_init(struct sc_gaming *g, const struct sc_gaming_params *params,
         }
     }
 
+    if (params->stall_timeout_ms) {
+        // Started here, watched from its own thread: the failure this guards
+        // against is a main thread that stops pumping events, so a check
+        // inside the event loop could never run.
+        SDL_SetAtomicInt(&g->stall_seen, 0);
+        SDL_SetAtomicInt(&g->stall_stop, 0);
+        g->stall_thread = SDL_CreateThread(stall_watchdog_run, "sc-stall", g);
+        if (!g->stall_thread) {
+            LOGW("stall watchdog: thread failed to start: %s", SDL_GetError());
+        } else {
+            LOGI("stall watchdog: first frame must arrive within %u ms",
+                 params->stall_timeout_ms);
+        }
+    }
+
     sc_gaming_current = g;
     return true;
+}
+
+static int
+stall_watchdog_run(void *userdata) {
+    struct sc_gaming *g = userdata;
+    const sc_tick start = sc_tick_now();
+    const unsigned timeout = g->params.stall_timeout_ms;
+
+    while (!SDL_GetAtomicInt(&g->stall_stop)) {
+        if (SDL_GetAtomicInt(&g->stall_seen)) {
+            // one job only: after the first picture the stream may legitimately
+            // go quiet (the phone screen is off), and killing that would be a
+            // worse bug than the one being guarded
+            return 0;
+        }
+        if (SC_TICK_TO_MS(sc_tick_now() - start) < timeout) {
+            SDL_Delay(100);
+            continue;
+        }
+        LOGE("video-stalled: no frame %" PRIu64 " ms after the mirror opened, "
+             "the decoder never delivered", (uint64_t) timeout);
+        // Ask the main thread to end the session properly. If the main thread
+        // is the blocked one -- which is what this looks like from outside --
+        // nothing consumes the event, so end the process here rather than
+        // leave the user a grey window they have to kill from Task Manager.
+        // Pushed directly because the device-free demo harness links gaming.c
+        // without events.c; sc_push_event() only adds the name to the log.
+        SDL_Event quit;
+        memset(&quit, 0, sizeof(quit));
+        quit.type = SC_EVENT_DECODER_ERROR;
+        SDL_PushEvent(&quit);
+        SDL_Delay(2000);
+        if (!SDL_GetAtomicInt(&g->stall_stop)) {
+            LOGE("video-stalled: the session did not close, exiting now");
+            exit(1);
+        }
+        return 0;
+    }
+    return 0;
 }
 
 static int
@@ -1475,6 +1533,11 @@ percentile_u32(const uint32_t *sorted, unsigned count, unsigned pctl) {
 
 void
 sc_gaming_destroy(struct sc_gaming *g) {
+    if (g->stall_thread) {
+        SDL_SetAtomicInt(&g->stall_stop, 1);
+        SDL_WaitThread(g->stall_thread, NULL);
+        g->stall_thread = NULL;
+    }
     if (sc_gaming_current == g) {
         sc_gaming_current = NULL;
     }
@@ -1910,6 +1973,9 @@ sc_gaming_on_frame_rendered(struct sc_gaming *g, struct AVFrame *decoded,
     sc_tick now = sc_tick_now();
 
     ++g->rendered_frames;
+    if (g->stall_thread && !SDL_GetAtomicInt(&g->stall_seen)) {
+        SDL_SetAtomicInt(&g->stall_seen, 1);
+    }
     if (!g->borderless_frame_checked && g->borderless_fullscreen_active) {
         // did the borderless state survive the window's first real frame?
         g->borderless_frame_checked = true;
