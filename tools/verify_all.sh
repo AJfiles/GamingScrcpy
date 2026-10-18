@@ -744,7 +744,7 @@ while IFS= read -r line; do
     case "$line" in
         OK\ *)   ok "${line#OK }" ;;
         FAIL\ *) bad "${line#FAIL }" ;;
-        note\ *) note "${line#note }" ;;
+        note\ *) printf '  \033[33mnote\033[0m  %s\n' "${line#note }" ;;
     esac
 done <<< "$scan"
 [ "$scan_rc" -eq 0 ] || bad "auto-scan probe exited $scan_rc"

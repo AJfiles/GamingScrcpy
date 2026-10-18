@@ -2646,6 +2646,30 @@ package that shipped without the timer printed `note 0 adb children in 24s` and
 narrower 12 s window failed on the *new* build too (2 children), which is how the
 under-count was found — the check went red before it was trusted.
 
+The full gate with PR-7 in it is `out/gate_v3_pr7b.log`, ending:
+
+```
+  PASS  auto-scan polled repeatedly: 5 adb children (threshold 3)
+
+summary
+  180 passed, 0 failed
+gate exit=0
+```
+
+That same run caught a defect in section 21 itself: the gate defines only `ok`,
+`bad` and `head_`, and the new section called a `note` helper that does not exist,
+so the shell printed `tools/verify_all.sh: line 747: note: command not found` and
+the measured count never reached the log. The pass/fail arithmetic was unaffected,
+which is exactly why it needed seeing: a check that swallows its own numbers
+reports a verdict with no evidence behind it. The branch now prints through the
+same inline `printf` the other sections use for harness notes, so the adb-children
+count is in the log next to the PASS it justifies.
+
+The repack and the extracted-ZIP self-test for PR-7 (`tools/package_selftest.sh`,
+whose output is `out/pkg_pr7_selftest.log`) were still running when this section
+was written; no packaged result is claimed here for the PR-7 archive. What is
+claimed is the gate above and the two probe runs, both filed.
+
 **What the gate caught on the way.** The first PR-7 run failed *outside* its own new
 section: §15 (no user-visible literal left in the code-behind) flagged the
 `Log($"auto-scan stopped: {ex.Message}")` line the timer writes when `adb` goes
