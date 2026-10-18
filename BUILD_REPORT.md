@@ -2952,21 +2952,67 @@ Measured by `tools/s23_latency_audio.sh` against `<dev-id-1>`; logs in
   when the source is silent, which is exactly the `a_kbps=0` vs `raw=187 kbps`
   difference measured there. It is now a hypothesis with a cheap test — play
   audio, re-run, expect `a_kbps>0` — rather than evidence of a broken opus path.
-* **A real bug, still open.** With `--game-audio-pcm=\\.\pipe\gsc_pcm_probe` the
-  client announces the tap with the correct path (`raw bytes ->
-  \\.\pipe\gsc_pcm_probe`) and gives up with a mangled one (`no consumer on
-  '\.\pipe\gsc_pcm_probe' after 10000 ms, disabled`), while a consumer waiting
-  on the exact name times out inside `Connect()`. The tap itself is healthy:
-  3.7 MB in 20 s is precisely 48 kHz × 2 ch × 16 bit, so nothing is lost in the
-  decoder or the resampler — the loss is in the pipe the scrcpy client opens.
-  `tools/pcm_tap_pipe_test.ps1` still passes against `gamingdemo`, so the
-  difference is in the scrcpy wiring, not in the sink code. Tracked as task #42.
+* **The "real bug" this section reported does not exist.** §5.1au shows the
+  tap delivers real, decodable bytes on the S23 Ultra over `\\.\pipe\`, and that
+  the two symptoms read here (a mangled name, a consumer that never connects)
+  were both bugs in the harness: MSYS collapses `'\\.\pipe\x'` to `'\.\pipe\x'`
+  when bash builds the argv, and the probe opened a pipe *client* while the tap
+  is also a client. Task #42 is closed as not-a-product-defect.
 * §6.1 as measured so far: h264/h265/av1 and opengl/vulkan all paint (§5.1as),
   the filter panel opens and closes without costing the picture, a 60 s 1080p
   recording is produced and decodes (61.4 s), and the 120 fps arms present at
   ~59 fps — so "120 fps" is validated as a configuration that runs, not as a
   measured 120 fps picture. The new profiles cannot be hardware-tested until §3
   lands, and auto-rescan needs someone to pull the cable, so it stays manual.
+
+
+### 5.1au. v4 §6.1 — the PCM tap over a named pipe does work; three harness bugs said otherwise
+
+§6.1 asks for `--game-audio-pcm=\\.\pipe\pcm_test → recibe bytes reales`. The
+first three runs of the TAP arm reported `-1`, then `no consumer`, then "a real
+bug in the scrcpy wiring" (§5.1at). None of that was the fork. With the harness
+fixed, the packaged client on `<dev-id-1>` produced:
+
+```
+INFO: pcm tap: raw bytes -> \\.\pipe\gsc_pcm_probe
+INFO: pcm tap: consumer connected (\\.\pipe\gsc_pcm_probe)
+INFO: pcm tap: 1433600 bytes crossed the pipe in 350 reads
+      first byte 1109 ms after the connection, 7.47 s decodable as
+      48 kHz / stereo / s16le (ffmpeg: max_volume -91.0 dB)
+NOTE  pcm tap: 350 chunks sent, 65 dropped (slow consumer)
+```
+
+1,433,600 / 192,000 B·s⁻¹ = 7.47 s of audio at exactly the nominal rate, and the
+byte count is a whole number of s16le stereo frames, so the transport is intact
+and the drop-oldest queue is doing its job against a PowerShell consumer that
+cannot keep up. What was actually broken:
+
+* **The consumer was a pipe client.** `sink_try_open()` calls `CreateFileA()`, so
+  scrcpy *dials* the pipe; the reader must *own* it with `NamedPipeServerStream`.
+  Two clients can wait for each other forever, which is what `Connect(10000)`
+  timeout meant. `tools/pcm_tap_pipe_test.ps1` (the offline gate test) already
+  had this right; the device probe did not.
+* **MSYS rewrites the pipe name.** `--game-audio-pcm='\\.\pipe\x'` typed in
+  bash — even single-quoted — reaches `scrcpy.exe` as `\.\pipe\x`. `sink_is_pipe`
+  then reads it as an ordinary file, `fopen` fails, and the bridge prints its
+  generic `no consumer on '%s'`. The earlier "announced intact, gave up mangled"
+  reading was wrong in both lines: `grep` showed the announce was mangled too,
+  and the same name launched from PowerShell arrives intact. Scripts that pass a
+  `\\.\pipe\` argument must launch the client from `cmd`/PowerShell (or set
+  `MSYS2_ARG_CONV_EXCL='*'`).
+* **A PowerShell dead-end that hid the result.** `$ErrorActionPreference='Stop'`
+  plus `Kill()` on a process that had already closed made the probe throw away a
+  complete measurement; and `Get-Process scrcpy` by name picked up an orphan from
+  an earlier arm, whose `Kill()` is "Access denied". It now only touches the
+  process it started, waits on that handle, and writes `result.txt` so the number
+  survives whatever the console does.
+
+The arm in `tools/s23_latency_audio.sh` now checks the name arrived intact (the
+`raw bytes -> \\.\pipe\` line, not just a byte count), that the tap connected,
+that the bytes divide into whole stereo frames, and that ffmpeg decodes them as
+48 kHz. Silence (-91 dB) is reported as the *content* of the sample, not as a
+failure: §6.1's criterion for this item is bytes on the wire, and the audibility
+step stays manual for the reason given in §5.1at.
 
 
 ## 6. What could NOT be validated here, and why

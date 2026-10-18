@@ -171,19 +171,67 @@ aud_arm opus
 aud_arm raw
 
 # ---------- PCM tap -----------------------------------------------------------
+# The first three versions of this arm launched the client from bash with
+# --game-audio-pcm='\\.\pipe\...' and read the tap with a NamedPipeClientStream.
+# Both were wrong: MSYS collapses the leading '\\' to '\' (so the fork saw a
+# file name, not a pipe), and the tap itself is a pipe *client*, so a client
+# consumer can never be reached. The probe is now the pipe server and starts the
+# client from PowerShell; this arm only judges its numbers.
 taskkill //F //IM scrcpy.exe >/dev/null 2>&1
-rm -f "$out/pcm_bytes.txt"
+rm -rf "$out/pcm"
+# PowerShell does not understand the /c/... paths this script works with, so the
+# two paths handed to it are converted; the result is read from a file because
+# the child process writes to the same console the pipeline is using
 powershell -NoProfile -ExecutionPolicy Bypass -File "$root/tools/pcm_pipe_probe.ps1" \
-    > "$out/pcm_bytes.txt" 2>/dev/null &
-"$exe" --serial="$serial" --video-codec=h264 --audio-codec=raw \
-    --game-audio-pcm='\\.\pipe\gsc_pcm_probe' > "$out/pcm.log" 2>&1 &
-sleep $((secs + 2))
-stop_scrcpy
-wait 2>/dev/null
-pcm=$(tr -d '[:space:]' < "$out/pcm_bytes.txt")
-printf 'TAP  pcm_bytes=%s\n' "${pcm:-none}"
+    -Exe "$(cygpath -w "$exe")" -Serial "$serial" -Seconds "$secs" \
+    -OutDir "$(cygpath -w "$out/pcm")" > "$out/pcm_probe.txt" 2>&1
+cat "$out/pcm/client.out" "$out/pcm/client.err" > "$out/pcm.log" 2>/dev/null
+pcmline=$(tr -d '\r' < "$out/pcm/result.txt" 2>/dev/null | tail -1)
+pcm=$(sed -n 's/.*BYTES=\([0-9-]*\).*/\1/p' <<< "$pcmline")
+first=$(sed -n 's/.*FIRST_MS=\([0-9-]*\).*/\1/p' <<< "$pcmline")
+# a raw s16le file has no header to probe, so its length is the byte count over
+# the nominal rate the client itself logged (48000 Hz x 2 ch x 16 bit)
+dur=$(awk -v b="${pcm:-0}" 'BEGIN{ printf "%.2f", b/192000 }')
+vol=$(ffmpeg -hide_banner -f s16le -ar 48000 -ac 2 -i "$out/pcm/pcm.raw" \
+        -af volumedetect -f null NUL 2>&1 | grep -o 'max_volume: [-0-9.]* dB')
+printf 'TAP  %s piped=%ss\n' "${pcmline:-no result}" "${dur:-0}"
+# these two lines are the evidence that the name survived the shell: a mangled
+# path is still logged, just without the second backslash
+if grep -qF 'raw bytes -> \\.\pipe\gsc_pcm_probe' "$out/pcm.log" 2>/dev/null; then
+    printf '  PASS the pipe name reached the client intact\n'
+else
+    printf '  FAIL the pipe name arrived mangled: %s\n' \
+        "$(grep -o 'raw bytes -> .*' "$out/pcm.log" | head -1)"
+    fails=$((fails+1))
+fi
+if grep -qF 'pcm tap: consumer connected' "$out/pcm.log" 2>/dev/null; then
+    printf '  PASS the tap connected to the pipe server\n'
+else
+    printf '  FAIL the tap never reached a pipe server\n'
+    fails=$((fails+1))
+fi
 case "${pcm:-}" in
-    ''|0|-1|none) printf '  FAIL the PCM tap delivered no bytes\n'; fails=$((fails+1));;
+    ''|0|none)
+        printf '  FAIL the PCM tap delivered no bytes\n'
+        fails=$((fails+1));;
+    *)
+        if [ $((pcm % 4)) -ne 0 ]; then
+            printf '  FAIL %s B is not a whole number of s16le stereo frames\n' "$pcm"
+            fails=$((fails+1))
+        fi
+        if awk -v d="${dur:-0}" 'BEGIN{ exit !(d < 1) }'; then
+            printf '  FAIL only %s s of audio crossed the pipe\n' "${dur:-0}"
+            fails=$((fails+1))
+        fi
+        if [ -z "${vol:-}" ]; then
+            printf '  FAIL the bytes are not decodable as 48 kHz stereo s16le\n'
+            fails=$((fails+1))
+        else
+            printf '  PASS %s B crossed the pipe, first byte after %s ms, %s s decodable as 48 kHz stereo (%s)\n' \
+                "$pcm" "${first:-?}" "$dur" "$vol"
+        fi
+        printf '  NOTE %s\n' "$(grep -o 'pcm tap: [0-9]* chunks sent.*' "$out/pcm.log" | tail -1)"
+        ;;
 esac
 
 # ---------- 60 s 1080p120 recording ------------------------------------------

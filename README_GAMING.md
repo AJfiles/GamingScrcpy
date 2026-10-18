@@ -210,6 +210,21 @@ then in OBS add an Audio Input Capture on `CABLE Output`, or run the ffmpeg
 bridge from §8. The launcher exposes the same thing as the *PCM tap* field plus
 the *mute PC* checkbox in the STREAMING section.
 
+Two things make the difference between bytes and silence when you test this by
+hand (both cost a debugging round here, see BUILD_REPORT §5.1au):
+
+* **The reader must own the pipe.** scrcpy dials out (`CreateFile`), so the
+  consumer has to be a pipe *server*:
+  `New-Object System.IO.Pipes.NamedPipeServerStream('gaming-pcm','InOut')` in
+  PowerShell, `\\.\pipe\gaming-pcm` as an OBS/ffmpeg input, or the VB-cable
+  device. A second `NamedPipeClientStream` waits for a connection that neither
+  side can offer.
+* **Start the client from `cmd` or PowerShell, not from MSYS/`bash`.** bash's
+  argument conversion turns `'\\.\pipe\name'` into `'\.\pipe\name'`; scrcpy then
+  reads it as a file name and, after 10 s, prints `no consumer on ...` — which
+  looks like a broken tap but is a mangled argument. `MSYS2_ARG_CONV_EXCL='*'`
+  also fixes it if the command has to live in a shell script.
+
 ### 4.3 Recording only, maximum quality
 
 ```
