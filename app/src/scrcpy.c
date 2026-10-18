@@ -55,6 +55,7 @@ struct scrcpy {
     struct sc_server server;
     struct sc_screen screen;
     struct sc_audio_player audio_player;
+    struct sc_pcm_tap pcm_tap;
     struct sc_demuxer video_demuxer;
     struct sc_demuxer audio_demuxer;
     struct sc_decoder video_decoder;
@@ -155,6 +156,9 @@ event_loop(struct scrcpy *s, bool has_screen) {
                 }
                 break;
         }
+        // the filter panel repaints here, never inside a frame: an idle panel
+        // costs one flag test and the mirror's per-frame path does not see it
+        sc_gaming_overlay_tick();
     }
     return SCRCPY_EXIT_FAILURE;
 }
@@ -408,6 +412,7 @@ scrcpy(struct scrcpy_options *options) {
     bool video_decoder_started = false;
     bool audio_decoder_initialized = false;
     bool audio_decoder_started = false;
+    bool pcm_tap_initialized = false;
 #ifdef HAVE_USB
     bool aoa_hid_initialized = false;
     bool keyboard_aoa_initialized = false;
@@ -841,6 +846,37 @@ aoa_complete:
             .hwdec_mode = options->hwdec_mode,
             .fullscreen = options->fullscreen,
             .start_fps_counter = options->start_fps_counter,
+            .gaming = {
+                .osd = (enum sc_osd_level) options->game_osd,
+                .upscale_filter = (enum sc_upscale_filter) options->game_upscale,
+                .postfx = options->game_postfx,
+                .sharpen = options->game_sharpen,
+                .night_boost = options->game_night_boost,
+                .saturation = options->game_saturation,
+                .contrast = options->game_contrast,
+                .brightness = options->game_brightness,
+                .gamma = options->game_gamma,
+                .borderless_fullscreen = options->game_borderless_fullscreen,
+                .low_latency = options->game_low_latency,
+                .telemetry_log = options->game_telemetry_log,
+                .cursor_autohide_ms = options->game_cursor_autohide_ms,
+                .touch_visualizer = options->game_touch_visualizer,
+                .always_on_top = options->always_on_top,
+                .max_fps = options->max_fps,
+                .frame_bridge = options->game_frame_bridge,
+                .audio_bridge = options->game_audio_bridge,
+                .bridge_scale_w = options->game_bridge_w,
+                .bridge_scale_h = options->game_bridge_h,
+                .bridge_filter = (enum sc_bridge_filter)
+                                 options->game_bridge_filter,
+                .window_filter = (enum sc_window_filter)
+                                 options->game_window_filter,
+                .filter_overlay = options->game_filter_overlay,
+                .filter_overlay_visible = options->game_overlay_visible,
+                .overlay_hotkey = options->game_overlay_hotkey,
+                .overlay_profiles = options->game_overlay_profiles,
+                .overlay_spanish = !options->game_overlay_english,
+            },
         };
 
         if (!sc_screen_init(&s->screen, &screen_params)) {
@@ -850,7 +886,8 @@ aoa_complete:
     }
 
     bool needs_video_decoder = options->video_playback;
-    bool needs_audio_decoder = options->audio_playback;
+    bool needs_audio_decoder = options->audio_playback
+                            || (options->audio && options->game_audio_pcm);
 #ifdef HAVE_V4L2
     needs_video_decoder |= !!options->v4l2_device;
 #endif
@@ -929,6 +966,21 @@ aoa_complete:
                              options->audio_output_buffer);
         sc_frame_source_add_sink(&s->audio_decoder.frame_source,
                                  &s->audio_player.frame_sink);
+    }
+
+    if (options->game_audio_pcm) {
+        if (needs_audio_decoder) {
+            // The tap is a sink of the decoder, not of the player, so that
+            // --no-audio-playback (game audio only in the virtual cable, PC
+            // speakers silent) still produces samples.
+            if (sc_pcm_tap_init(&s->pcm_tap, options->game_audio_pcm)) {
+                pcm_tap_initialized = true;
+                sc_frame_source_add_sink(&s->audio_decoder.frame_source,
+                                         &s->pcm_tap.frame_sink);
+            }
+        } else {
+            LOGW("--game-audio-pcm ignored: audio is disabled");
+        }
     }
 
 #ifdef HAVE_V4L2
@@ -1172,6 +1224,12 @@ end:
 
     if (audio_decoder_initialized) {
         sc_decoder_destroy(&s->audio_decoder);
+    }
+
+    // the decoder must not keep a reference to the tap sink
+    if (pcm_tap_initialized) {
+        sc_pcm_tap_destroy(&s->pcm_tap);
+        pcm_tap_initialized = false;
     }
 
     // Destroy the screen only after the video demuxer is guaranteed to be

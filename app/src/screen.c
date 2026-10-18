@@ -276,6 +276,10 @@ sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
         goto end;
     }
 
+    if (screen->gaming_active) {
+        sc_gaming_apply_upscale(&screen->gaming, texture);
+    }
+
     float scale = SDL_GetWindowPixelDensity(screen->window);
     if (scale == 0) {
         // Just in case, but in practice the function can only fail when window
@@ -337,6 +341,10 @@ sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
 
     if (!ok) {
         LOGE("Could not render texture: %s", SDL_GetError());
+    }
+
+    if (screen->gaming_active) {
+        sc_gaming_render_overlay(&screen->gaming, &screen->rect, scale);
     }
 
 end:
@@ -650,6 +658,27 @@ sc_screen_init(struct sc_screen *screen,
         goto error_destroy_renderer;
     }
 
+    screen->gaming_active = false;
+    if (sc_gaming_init(&screen->gaming, &params->gaming, screen->window,
+                       screen->renderer)) {
+        screen->gaming_active = true;
+    }
+
+    screen->overlay = NULL;
+    if (params->gaming.filter_overlay) {
+        struct sc_gaming_overlay_params op = {
+            .title = "GamingScrcpy - filtros",
+            .spanish = params->gaming.overlay_spanish,
+            .start_visible = params->gaming.filter_overlay_visible,
+            .hotkey = params->gaming.overlay_hotkey,
+            .profiles_path = params->gaming.overlay_profiles,
+            .parent = screen->window,
+        };
+        // a separate window, so its cost never lands on the mirrored frame;
+        // failing to open one must not end the session
+        screen->overlay = sc_gaming_overlay_create(&screen->gaming, &op);
+    }
+
     ok = SDL_StartTextInput(screen->window);
     if (!ok) {
         LOGE("Could not enable text input: %s", SDL_GetError());
@@ -844,6 +873,14 @@ sc_screen_destroy(struct sc_screen *screen) {
     if (screen->disconnect_started) {
         sc_disconnect_destroy(&screen->disconnect);
     }
+    if (screen->overlay) {
+        sc_gaming_overlay_destroy(screen->overlay);
+        screen->overlay = NULL;
+    }
+    if (screen->gaming_active) {
+        sc_gaming_destroy(&screen->gaming);
+        screen->gaming_active = false;
+    }
     sc_texture_destroy(&screen->tex);
     av_frame_free(&screen->frame);
 #ifdef SC_DISPLAY_FORCE_OPENGL_CORE_PROFILE
@@ -941,7 +978,11 @@ sc_screen_set_orientation(struct sc_screen *screen,
     struct sc_size new_content_size =
         get_oriented_size(screen->frame_size, orientation);
 
-    set_content_size(screen, new_content_size, true);
+    // A borderless window is sized to the display, so this resize (which is not
+    // gated by --no-auto-resize) must not shrink it back to the content size.
+    set_content_size(screen, new_content_size,
+                     !(screen->gaming_active
+                       && screen->gaming.borderless_fullscreen_active));
 
     screen->orientation = orientation;
     LOGI("Display orientation set to %s", sc_orientation_get_name(orientation));
@@ -982,12 +1023,37 @@ sc_screen_apply_frame(struct sc_screen *screen, bool can_resize) {
         sc_screen_update_content_rect(screen);
     }
 
-    bool ok = sc_texture_update(&screen->tex, frame);
+    struct AVFrame *out = frame;
+    struct AVFrame *presented = out;
+    if (screen->gaming_active) {
+        out = sc_gaming_process_frame(&screen->gaming, frame);
+        if (!out) {
+            return false;
+        }
+        float density = SDL_GetWindowPixelDensity(screen->window);
+        if (density <= 0.f) {
+            density = 1.f;
+        }
+        // the content rect is in logical pixels; the texture needs device pixels
+        sc_gaming_set_window_target(&screen->gaming,
+                                    (unsigned) (screen->rect.w * density),
+                                    (unsigned) (screen->rect.h * density));
+        // Optional high-quality host resample: the GPU then blits 1:1 instead of
+        // stretching. It only replaces the picture sent to the texture, so the
+        // frame bridge and the pointer mapping keep using the device-size frame.
+        presented = sc_gaming_resample_for_window(&screen->gaming, out);
+    }
+
+    bool ok = sc_texture_update(&screen->tex, presented);
     if (!ok) {
         return false;
     }
 
     sc_screen_render(screen, false);
+
+    if (screen->gaming_active) {
+        sc_gaming_on_frame_rendered(&screen->gaming, frame, out);
+    }
     return true;
 }
 
@@ -1016,6 +1082,13 @@ sc_screen_update_frame(struct sc_screen *screen) {
     sc_frame_buffer_consume(&screen->fb, screen->frame);
     // read with lock held
     bool can_resize = !screen->prevent_auto_resize;
+    // A borderless window is deliberately sized to the whole display, so the
+    // first frame must not shrink it back to the content size (that also
+    // restored the caption and defeated --game-borderless-fullscreen).
+    if (can_resize && screen->gaming_active
+                 && screen->gaming.borderless_fullscreen_active) {
+        can_resize = false;
+    }
     sc_mutex_unlock(&screen->mutex);
     return sc_screen_apply_frame(screen, can_resize);
 }
@@ -1170,6 +1243,22 @@ sc_disconnect_on_timeout(struct sc_disconnect *d, void *userdata) {
 
 void
 sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
+    if (screen->overlay && sc_gaming_event_is_for_overlay(event)) {
+        // The filter panel is a second window. SDL event watches cannot drop
+        // events (their return value is ignored), so without this guard a drag
+        // on a slider would reach the input manager and be injected into the
+        // phone as a touch, and the panel's own expose/resize would re-run the
+        // mirror's layout. The panel handles them in its own watch.
+        return;
+    }
+    if (screen->overlay
+            && sc_gaming_overlay_want_local_hotkey(screen->overlay, event)) {
+        // Another desktop application owns the global hotkey, so the same
+        // combination is handled here while the mirror has focus. Returning
+        // before the switch is what keeps it from being typed into the game.
+        sc_gaming_overlay_toggle(screen->overlay);
+        return;
+    }
     switch (event->type) {
         case SC_EVENT_OPEN_WINDOW: {
             struct sc_size *size = event->user.data1;

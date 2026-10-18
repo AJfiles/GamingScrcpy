@@ -15,6 +15,8 @@
 #include "disconnect.h"
 #include "fps_counter.h"
 #include "frame_buffer.h"
+#include "gaming.h"
+#include "overlay.h"
 #include "input_manager.h"
 #include "mouse_capture.h"
 #include "options.h"
@@ -52,6 +54,11 @@ struct sc_screen {
     struct sc_input_manager im;
     struct sc_mouse_capture mc; // only used in mouse relative mode
     struct sc_fps_counter fps_counter;
+
+    struct sc_gaming gaming;
+    bool gaming_active;
+    // the real-time filter panel, NULL when --game-filter-overlay is off
+    struct sc_gaming_overlay *overlay;
 
     struct sc_mutex mutex;
     struct sc_frame_buffer fb; // protected by mutex
@@ -150,6 +157,8 @@ struct sc_screen_params {
 
     bool fullscreen;
     bool start_fps_counter;
+
+    struct sc_gaming_params gaming;
 };
 
 // initialize screen, create window, renderer and texture (window is hidden)

@@ -373,6 +373,34 @@ struct scrcpy_options {
     bool flex_display;
     bool ignore_video_encoder_constraints;
     bool update_terminal_title;
+
+    // --- gaming fork extensions (all of them are host-side only) ---
+    uint8_t game_osd;               // enum sc_osd_level
+    uint8_t game_upscale;           // enum sc_upscale_filter
+    uint8_t game_postfx;            // OR of enum sc_postfx
+    uint8_t game_sharpen;           // 0..100
+    uint8_t game_night_boost;       // 0..100
+    uint8_t game_saturation;        // 0..200
+    uint8_t game_contrast;          // 0..200, 100 = unchanged
+    uint8_t game_brightness;        // 0..200, 100 = unchanged
+    uint8_t game_gamma;             // 25..200, 100 = unchanged
+    uint32_t game_cursor_autohide_ms;
+    bool game_borderless_fullscreen;
+    bool game_low_latency;
+    bool game_telemetry_log;
+    bool game_touch_visualizer;
+    const char *game_frame_bridge;  // file, '-' or \\.\pipe\<name>
+    const char *game_audio_bridge;
+    const char *game_audio_pcm;     // decoded PCM tap (file, '-' or a pipe)
+    uint32_t game_bridge_w;         // host resample target for the frame bridge
+    uint32_t game_bridge_h;
+    uint8_t game_bridge_filter;     // enum sc_bridge_filter
+    uint8_t game_window_filter;     // enum sc_window_filter
+    bool game_filter_overlay;       // real-time filter panel window
+    bool game_overlay_visible;      // open it at start instead of on hotkey
+    const char *game_overlay_hotkey;    // "super+alt+f"
+    const char *game_overlay_profiles;  // filter profile file
+    bool game_overlay_english;      // panel labels in English instead of Spanish
 };
 
 extern const struct scrcpy_options scrcpy_options_default;

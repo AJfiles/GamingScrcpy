@@ -125,6 +125,29 @@ sc_recorder_write_audio(struct sc_recorder *recorder, AVPacket *packet) {
     return sc_recorder_write_stream(recorder, &recorder->audio_stream, packet);
 }
 
+static void
+sc_recorder_publish_context(struct sc_recorder *recorder,
+                            AVFormatContext *ctx) {
+    sc_mutex_lock(&recorder->mutex);
+    recorder->ctx = ctx;
+    sc_cond_broadcast(&recorder->cond);
+    sc_mutex_unlock(&recorder->mutex);
+}
+
+// Called with the mutex held. The context is only built once the output file
+// has been opened, so the first sink to attach must wait for it: creating its
+// stream on a context which does not exist yet crashes the client. Upstream
+// relies on the ADB handshake being slower than this thread, which is not a
+// synchronisation argument (and loses on a busy machine, because the recorder
+// thread runs at low priority).
+static bool
+sc_recorder_wait_for_context(struct sc_recorder *recorder) {
+    while (!recorder->ctx && !recorder->stopped) {
+        sc_cond_wait(&recorder->cond, &recorder->mutex);
+    }
+    return recorder->ctx != NULL;
+}
+
 static bool
 sc_recorder_open_output_file(struct sc_recorder *recorder) {
     const char *format_name = sc_recorder_get_format_name(recorder->format);
@@ -135,30 +158,32 @@ sc_recorder_open_output_file(struct sc_recorder *recorder) {
         return false;
     }
 
-    recorder->ctx = avformat_alloc_context();
-    if (!recorder->ctx) {
+    AVFormatContext *ctx = avformat_alloc_context();
+    if (!ctx) {
         LOG_OOM();
         return false;
     }
 
     char *file_url = sc_str_concat("file:", recorder->filename);
     if (!file_url) {
-        avformat_free_context(recorder->ctx);
+        avformat_free_context(ctx);
         return false;
     }
 
-    int ret = avio_open(&recorder->ctx->pb, file_url, AVIO_FLAG_WRITE);
+    int ret = avio_open(&ctx->pb, file_url, AVIO_FLAG_WRITE);
     free(file_url);
     if (ret < 0) {
         LOGE("Failed to open output file: %s", recorder->filename);
-        avformat_free_context(recorder->ctx);
+        avformat_free_context(ctx);
         return false;
     }
 
-    recorder->ctx->oformat = format;
+    ctx->oformat = format;
 
-    av_dict_set(&recorder->ctx->metadata, "comment",
+    av_dict_set(&ctx->metadata, "comment",
                 "Recorded by scrcpy " SCRCPY_VERSION, 0);
+
+    sc_recorder_publish_context(recorder, ctx);
 
     LOGI("Recording started to %s file: %s", format_name, recorder->filename);
     return true;
@@ -166,8 +191,16 @@ sc_recorder_open_output_file(struct sc_recorder *recorder) {
 
 static void
 sc_recorder_close_output_file(struct sc_recorder *recorder) {
-    avio_close(recorder->ctx->pb);
-    avformat_free_context(recorder->ctx);
+    // Unpublish before freeing: a sink which attaches from now on must see no
+    // context at all, not a dangling one
+    sc_mutex_lock(&recorder->mutex);
+    AVFormatContext *ctx = recorder->ctx;
+    recorder->ctx = NULL;
+    sc_cond_broadcast(&recorder->cond);
+    sc_mutex_unlock(&recorder->mutex);
+
+    avio_close(ctx->pb);
+    avformat_free_context(ctx);
 }
 
 static inline bool
@@ -479,6 +512,8 @@ run_recorder(void *data) {
     // Discard pending packets
     sc_recorder_queue_clear(&recorder->video_queue);
     sc_recorder_queue_clear(&recorder->audio_queue);
+    // Wake a sink which is waiting for the output file that will never come
+    sc_cond_broadcast(&recorder->cond);
     sc_mutex_unlock(&recorder->mutex);
 
     if (success) {
@@ -543,7 +578,7 @@ sc_recorder_video_packet_sink_open(struct sc_packet_sink *sink,
     assert(!recorder->video_init);
 
     sc_mutex_lock(&recorder->mutex);
-    if (recorder->stopped) {
+    if (!sc_recorder_wait_for_context(recorder)) {
         sc_mutex_unlock(&recorder->mutex);
         return false;
     }
@@ -647,6 +682,10 @@ sc_recorder_audio_packet_sink_open(struct sc_packet_sink *sink,
     assert(!recorder->audio_init);
 
     sc_mutex_lock(&recorder->mutex);
+    if (!sc_recorder_wait_for_context(recorder)) {
+        sc_mutex_unlock(&recorder->mutex);
+        return false;
+    }
 
     AVStream *stream = avformat_new_stream(recorder->ctx, NULL);
     if (!stream) {
@@ -779,6 +818,8 @@ sc_recorder_init(struct sc_recorder *recorder, const char *filename,
     sc_vecdeque_init(&recorder->video_queue);
     sc_vecdeque_init(&recorder->audio_queue);
     recorder->stopped = false;
+    // Published by the recorder thread once the output file is open
+    recorder->ctx = NULL;
 
     recorder->video_init = false;
     recorder->audio_init = false;

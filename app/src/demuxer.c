@@ -1,5 +1,7 @@
 #include "demuxer.h"
 
+#include "gaming.h"
+
 #include <assert.h>
 #include <inttypes.h>
 #include <libavcodec/avcodec.h>
@@ -166,6 +168,14 @@ sc_demuxer_recv_packet(struct sc_demuxer *demuxer, const uint8_t *header,
         }
 
         *(sc_tick *) packet->opaque_ref->data = recv_date;
+    }
+
+    if (sc_gaming_current) {
+        bool is_video = !strcmp(demuxer->name, "video");
+        sc_gaming_account_packet(sc_gaming_current, len, is_video);
+        if (!is_video) {
+            sc_gaming_push_audio(sc_gaming_current, packet->data, len);
+        }
     }
 
     if (pts_flags & SC_PACKET_FLAG_CONFIG) {

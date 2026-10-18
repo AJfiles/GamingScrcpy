@@ -18,6 +18,8 @@ src = [
     'src/egl.c',
     'src/events.c',
     'src/file_pusher.c',
+    'src/gaming.c',
+    'src/overlay.c',
     'src/fps_counter.c',
     'src/frame_buffer.c',
     'src/hwdec.c',
@@ -147,6 +149,8 @@ dependencies = [
     dependency('libavcodec', version: '>= 60.3', static: static),
     dependency('libavutil', version: '>= 58.2', static: static),
     dependency('libswresample', static: static),
+    # the gaming frame bridge converts YUV420P frames to RGBA for OBS/FFmpeg
+    dependency('libswscale', static: static),
     dependency('sdl3', version: '>= 3.2.0', static: static),
 ]
 
@@ -240,6 +244,41 @@ executable('scrcpy', src,
            include_directories: src_dir,
            install: true,
            c_args: [])
+
+# Offline host-presentation engine test: drives the real postfx/upscaling/OSD/
+# bridge code over a synthetic frame, with no device attached.
+gaming_demo_src = [
+    'tests/gaming_demo.c',
+    'src/gaming.c',
+    'src/overlay.c',
+    'src/compat.c',
+    'src/util/log.c',
+    'src/util/memory.c',
+    'src/util/thread.c',
+    'src/util/tick.c',
+]
+executable('gamingdemo', gaming_demo_src,
+           dependencies: dependencies,
+           include_directories: src_dir,
+           install: false)
+
+# Device-free recorder harness: feeds a real Annex-B stream into sc_recorder
+# (see tools/recorder_integrity_test.sh).
+recorder_integrity_src = [
+    'tests/recorder_integrity.c',
+    'src/recorder.c',
+    'src/compat.c',
+    'src/util/log.c',
+    'src/util/memory.c',
+    'src/util/thread.c',
+    'src/util/tick.c',
+    'src/util/str.c',
+    'src/util/strbuf.c',
+]
+executable('recorderintegrity', recorder_integrity_src,
+           dependencies: dependencies,
+           include_directories: src_dir,
+           install: false)
 
 # <https://mesonbuild.com/Builtin-options.html#directories>
 datadir = get_option('datadir') # by default 'share'

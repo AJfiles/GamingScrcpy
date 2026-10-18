@@ -112,6 +112,31 @@ enum {
     OPT_IGNORE_VIDEO_ENCODER_CONSTRAINTS,
     OPT_NO_TERMINAL_TITLE,
     OPT_HWDEC,
+    OPT_GAME_OSD,
+    OPT_GAME_UPSCALE,
+    OPT_GAME_POSTFX,
+    OPT_GAME_SHARP,
+    OPT_GAME_NIGHT_BOOST,
+    OPT_GAME_SATURATION,
+    OPT_GAME_CONTRAST,
+    OPT_GAME_BRIGHTNESS,
+    OPT_GAME_GAMMA,
+    OPT_GAME_BORDERLESS_FULLSCREEN,
+    OPT_GAME_LOW_LATENCY,
+    OPT_GAME_TELEMETRY_LOG,
+    OPT_GAME_CURSOR_AUTOHIDE,
+    OPT_GAME_TOUCH_VISUALIZER,
+    OPT_GAME_FRAME_BRIDGE,
+    OPT_GAME_AUDIO_BRIDGE,
+    OPT_GAME_BRIDGE_SCALE,
+    OPT_GAME_BRIDGE_FILTER,
+    OPT_GAME_WINDOW_FILTER,
+    OPT_GAME_AUDIO_PCM,
+    OPT_GAME_FILTER_OVERLAY,
+    OPT_GAME_OVERLAY_VISIBLE,
+    OPT_GAME_OVERLAY_HOTKEY,
+    OPT_GAME_FILTER_PROFILES,
+    OPT_GAME_OVERLAY_ENGLISH,
 };
 
 struct sc_option {
@@ -148,6 +173,228 @@ struct sc_getopt_adapter {
 };
 
 static const struct sc_option options[] = {
+    {
+        .longopt_id = OPT_GAME_OSD,
+        .longopt = "game-osd",
+        .argdesc = "none|compact|full",
+        .text = "Draw an on-screen gaming telemetry overlay on the host "
+                "picture only (never on the device).\n"
+                "compact: FPS and latency.\n"
+                "full: FPS, video/audio bitrate, latency avg/max, source and "
+                "on-screen sizes, bridge and post-processing state.",
+    },
+    {
+        .longopt_id = OPT_GAME_UPSCALE,
+        .longopt = "game-upscale",
+        .argdesc = "default|nearest|linear|pixelart",
+        .text = "Host-side upscaling filter for the mirror window. Only the "
+                "presentation is affected: the device keeps its native "
+                "resolution, so game UI scaling and touch alignment are "
+                "unchanged.\n"
+                "'pixelart' uses the SDL3 adaptive pixel-art filter, 'nearest' "
+                "is raw pixels, 'linear' is smooth (keep --mipmaps enabled for "
+                "the best downscale quality).",
+    },
+    {
+        .longopt_id = OPT_GAME_POSTFX,
+        .longopt = "game-postfx",
+        .argdesc = "sharp|night|sat|contrast|brightness|gamma,...",
+        .text = "Enable host-side post-processing filters (comma separated: "
+                "sharp, night, sat, contrast, brightness, gamma). Off by "
+                "default: each enabled filter processes the decoded frame on "
+                "the CPU and adds measurable host latency (check "
+                "--game-osd=full).",
+    },
+    {
+        .longopt_id = OPT_GAME_SHARP,
+        .longopt = "game-sharp",
+        .argdesc = "percent",
+        .text = "Strength of the CAS-style luma sharpening (0-100, default "
+                "35). Sharpens edges without touching chroma.",
+    },
+    {
+        .longopt_id = OPT_GAME_NIGHT_BOOST,
+        .longopt = "game-night-boost",
+        .argdesc = "percent",
+        .text = "Lift shadows for dark maps: gamma up to 2.5 plus a black "
+                "level lift (0-100).",
+    },
+    {
+        .longopt_id = OPT_GAME_SATURATION,
+        .longopt = "game-saturation",
+        .argdesc = "percent",
+        .text = "Host colour grade: 100 is unchanged, >100 boosts saturation "
+                "of the mirrored picture (0-200).",
+    },
+    {
+        .longopt_id = OPT_GAME_CONTRAST,
+        .longopt = "game-contrast",
+        .argdesc = "percent",
+        .text = "Host luma contrast, pivoted at mid grey: 100 is unchanged "
+                "(0-200). Applied with brightness and gamma through one "
+                "256-entry table, so the whole grade costs a single pass over "
+                "the Y plane and cannot shift hue.",
+    },
+    {
+        .longopt_id = OPT_GAME_BRIGHTNESS,
+        .longopt = "game-brightness",
+        .argdesc = "percent",
+        .text = "Host luma offset: 100 is unchanged, 0 is black, 200 is white "
+                "(0-200). This only brightens the mirrored picture on the PC, "
+                "it never writes the device screen brightness.",
+    },
+    {
+        .longopt_id = OPT_GAME_GAMMA,
+        .longopt = "game-gamma",
+        .argdesc = "percent",
+        .text = "Host gamma on the luma plane: 100 is unchanged, >100 "
+                "brightens the mid-tones, <100 darkens them (25-200).",
+    },
+    {
+        .longopt_id = OPT_GAME_BORDERLESS_FULLSCREEN,
+        .longopt = "game-borderless-fullscreen",
+        .text = "Ask for a borderless window covering the monitor work "
+                "area: like a game's borderless mode, but still a normal "
+                "window so OBS Window Capture and Alt+Tab keep working.\n"
+                "KNOWN ISSUE: the first video frame currently resizes the "
+                "window back to the content size, so this does not yet end "
+                "up fullscreen-borderless (see README_GAMING.md).\n"
+                "Toggle at runtime with Super/Alt+F2.",
+    },
+    {
+        .longopt_id = OPT_GAME_LOW_LATENCY,
+        .longopt = "game-low-latency",
+        .text = "Disable presentation vsync for the lowest host display "
+                "latency (may tear; recommended together with "
+                "--render-driver=direct3d11).",
+    },
+    {
+        .longopt_id = OPT_GAME_FILTER_OVERLAY,
+        .longopt = "game-filter-overlay",
+        .text = "Open the real-time filter panel: a borderless always-on-top "
+                "window of its own that changes the colour grade (contrast, "
+                "saturation, brightness, gamma, CAS sharpen, night boost) "
+                "while the session runs, without restarting it. It is a "
+                "separate window and only edits the parameters of the "
+                "--game-postfx engine, so it adds no pass to the mirrored "
+                "frame; the panel is invisible until the hotkey opens it.",
+    },
+    {
+        .longopt_id = OPT_GAME_OVERLAY_VISIBLE,
+        .longopt = "game-overlay-visible",
+        .text = "Show the filter panel as soon as the session starts instead "
+                "of waiting for --game-overlay-hotkey.",
+    },
+    {
+        .longopt_id = OPT_GAME_OVERLAY_HOTKEY,
+        .longopt = "game-overlay-hotkey",
+        .argdesc = "combo",
+        .text = "Global hotkey that shows and hides the filter panel, written "
+                "as modifiers joined by '+' and one key, e.g. "
+                "super+alt+f (default), ctrl+shift+f9. Registered with the "
+                "system, so it works when the mirror is not focused; if "
+                "another program owns that combination the log says so and "
+                "the panel still opens while the mirror has focus. Avoid "
+                "super/alt+F1-F5, which are the runtime toggles.",
+    },
+    {
+        .longopt_id = OPT_GAME_FILTER_PROFILES,
+        .longopt = "game-filter-profiles",
+        .argdesc = "path",
+        .text = "File the filter panel reads and writes its named grades in "
+                "(one 'current' line plus 'profile NAME ...' lines). Without "
+                "it the panel works but cannot save, and says so on screen. "
+                "The launcher keeps its own profiles in this format so a "
+                "grade survives a session restart.",
+    },
+    {
+        .longopt_id = OPT_GAME_OVERLAY_ENGLISH,
+        .longopt = "game-overlay-english",
+        .text = "Paint the filter panel's labels in English; Spanish is the "
+                "default.",
+    },
+    {
+        .longopt_id = OPT_GAME_TELEMETRY_LOG,
+        .longopt = "game-telemetry-log",
+        .text = "Write the OSD telemetry numbers (fps, bitrate, capture-to-"
+                "present latency) to the log once per second, and a summary "
+                "with percentiles on exit. Machine-readable, for measuring a "
+                "live mirror without a camera. They are INFO lines, so they "
+                "go to stdout.",
+    },
+    {
+        .longopt_id = OPT_GAME_CURSOR_AUTOHIDE,
+        .longopt = "game-cursor-autohide",
+        .argdesc = "ms",
+        .text = "Hide the PC cursor after this idle delay; it reappears on "
+                "mouse movement.",
+    },
+    {
+        .longopt_id = OPT_GAME_TOUCH_VISUALIZER,
+        .longopt = "game-touch-visualizer",
+        .text = "Draw touch/pointer markers on the host overlay (not on the "
+                "device), for tutorials and streams. Toggle with Super/Alt+F3.",
+    },
+    {
+        .longopt_id = OPT_GAME_FRAME_BRIDGE,
+        .longopt = "game-frame-bridge",
+        .argdesc = "path",
+        .text = "Send the presented frames as raw RGBA to a file, to stdout "
+                "(-) or to a Windows named pipe (\\\\.\\pipe\\name) on a "
+                "separate thread with a drop-oldest queue, so a slow OBS or "
+                "FFmpeg consumer never stalls the mirror.\n"
+                "Consume with: ffplay -f rawvideo -pixel_format rgba "
+                "-video_size WxH <path>",
+    },
+    {
+        .longopt_id = OPT_GAME_AUDIO_BRIDGE,
+        .longopt = "game-audio-bridge",
+        .argdesc = "path",
+        .text = "Split the device audio stream (raw encoded packets, no "
+                "re-encode) to a file, stdout (-) or a named pipe, to route it "
+                "into a virtual cable or a separate OBS audio source.",
+    },
+    {
+        .longopt_id = OPT_GAME_AUDIO_PCM,
+        .longopt = "game-audio-pcm",
+        .argdesc = "path",
+        .text = "Additionally copy the audio that is being played on the PC to "
+                "a file, stdout (-) or a named pipe, as decoded PCM "
+                "(s16le / 48 kHz / stereo). Unlike --game-audio-bridge this is "
+                "playable by anything that expects a sound stream: a virtual "
+                "cable, ffplay, or an audio editor. The device audio is still "
+                "never re-encoded for the mirror itself.",
+    },
+    {
+        .longopt_id = OPT_GAME_BRIDGE_SCALE,
+        .longopt = "game-bridge-scale",
+        .argdesc = "WxH",
+        .text = "Resample the frames sent to --game-frame-bridge to an exact "
+                "WxH (16-8192) on the bridge thread, so OBS or an encoder "
+                "receives a clean 1080p/1440p/4K signal. The mirrored window, "
+                "the device framebuffer and touch mapping are untouched.",
+    },
+    {
+        .longopt_id = OPT_GAME_BRIDGE_FILTER,
+        .longopt = "game-bridge-filter",
+        .argdesc = "filter",
+        .text = "Kernel used by --game-bridge-scale: default, point, bilinear, "
+                "fast, bicubic or lanczos (default: bilinear).\n"
+                "This is a host CPU resample of the stream feed only; the "
+                "window uses --game-upscale on the GPU.",
+    },
+    {
+        .longopt_id = OPT_GAME_WINDOW_FILTER,
+        .longopt = "game-window-filter",
+        .argdesc = "filter",
+        .text = "Resample the picture that is actually presented to the exact "
+                "size of the window content area on the host CPU, with a true "
+                "point/bilinear/fast/bicubic/lanczos kernel, so the GPU only "
+                "has to blit it 1:1 instead of stretching it. Quality is much "
+                "higher than --game-upscale at the cost of CPU time on the "
+                "render thread (off by default). The device framebuffer, the "
+                "capture size and the touch mapping are not modified.",
+    },
     {
         .longopt_id = OPT_ALWAYS_ON_TOP,
         .longopt = "always-on-top",
@@ -2547,6 +2794,119 @@ parse_hwdec_mode(const char *optarg, enum sc_hwdec_mode *mode) {
     return false;
 }
 
+// --- gaming fork option parsers (host-side presentation features) ---
+
+#define GAME_POSTFX_SHARP 0x1
+#define GAME_POSTFX_NIGHT 0x2
+#define GAME_POSTFX_SAT   0x4
+#define GAME_POSTFX_CONTRAST    0x8
+#define GAME_POSTFX_BRIGHTNESS  0x10
+#define GAME_POSTFX_GAMMA       0x20
+
+static const char *const GAME_OSD_VALUES[] = {"none", "compact", "full"};
+static const char *const GAME_UPSCALE_VALUES[] = {"default", "nearest",
+                                                  "linear", "pixelart"};
+static const char *const GAME_BRIDGE_FILTER_VALUES[] = {"default", "point",
+                                                        "bilinear", "fast",
+                                                        "bicubic", "lanczos"};
+static const char *const GAME_WINDOW_FILTER_VALUES[] = {"off", "point",
+                                                         "bilinear", "fast",
+                                                         "bicubic", "lanczos"};
+
+static bool
+parse_bridge_size(const char *value, uint32_t *w, uint32_t *h) {
+    const char *bad = " (expected WxH, e.g. 1920x1080)";
+    char *end;
+    unsigned long vw = strtoul(value, &end, 10);
+    unsigned long vh = 0;
+    if (end == value || *end != 'x') {
+        LOGE("Invalid --game-bridge-scale: '%s'%s", value, bad);
+        return false;
+    }
+    const char *after = end + 1;
+    vh = strtoul(after, &end, 10);
+    if (end == after || *end) {
+        LOGE("Invalid --game-bridge-scale: '%s'%s", value, bad);
+        return false;
+    }
+    if (vw < 16 || vw > 8192 || vh < 16 || vh > 8192) {
+        LOGE("Invalid --game-bridge-scale: '%s' (each dimension must be "
+             "16-8192)", value);
+        return false;
+    }
+    *w = (uint32_t) vw;
+    *h = (uint32_t) vh;
+    return true;
+}
+
+static bool
+parse_game_choice(const char *value, const char *const *values, size_t count,
+                  uint8_t *out, const char *name) {
+    for (size_t i = 0; i < count; ++i) {
+        if (!strcmp(value, values[i])) {
+            *out = (uint8_t) i;
+            return true;
+        }
+    }
+    char list[128] = "";
+    for (size_t i = 0; i < count; ++i) {
+        strncat(list, i ? ", " : "", sizeof(list) - strlen(list) - 1);
+        strncat(list, values[i], sizeof(list) - strlen(list) - 1);
+    }
+    LOGE("Invalid %s: '%s' (expected one of: %s)", name, value, list);
+    return false;
+}
+
+static bool
+parse_bounded_int(const char *value, unsigned min, unsigned max,
+                  unsigned *out, const char *name) {
+    char *end;
+    unsigned long v = strtoul(value, &end, 10);
+    if (end == value || *end || v > 0xFFFFFFFF || v < min || v > max) {
+        LOGE("Invalid %s: '%s' (must be between %u and %u)", name, value,
+             min, max);
+        return false;
+    }
+    *out = (unsigned) v;
+    return true;
+}
+
+static bool
+parse_game_postfx(const char *value, uint8_t *out) {
+    unsigned mask = 0;
+    char *dup = strdup(value);
+    if (!dup) {
+        return false;
+    }
+    char *saveptr = NULL;
+    for (char *tok = strtok_r(dup, ",", &saveptr); tok;
+         tok = strtok_r(NULL, ",", &saveptr)) {
+        if (!strcmp(tok, "sharp")) {
+            mask |= GAME_POSTFX_SHARP;
+        } else if (!strcmp(tok, "night")) {
+            mask |= GAME_POSTFX_NIGHT;
+        } else if (!strcmp(tok, "sat")) {
+            mask |= GAME_POSTFX_SAT;
+        } else if (!strcmp(tok, "contrast")) {
+            mask |= GAME_POSTFX_CONTRAST;
+        } else if (!strcmp(tok, "brightness")) {
+            mask |= GAME_POSTFX_BRIGHTNESS;
+        } else if (!strcmp(tok, "gamma")) {
+            mask |= GAME_POSTFX_GAMMA;
+        } else if (!strcmp(tok, "none")) {
+            mask = 0;
+        } else {
+            LOGE("Invalid --game-postfx filter: '%s' (expected sharp, night, "
+                 "sat, contrast, brightness, gamma or none)", tok);
+            free(dup);
+            return false;
+        }
+    }
+    free(dup);
+    *out = (uint8_t) mask;
+    return true;
+}
+
 static bool
 parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
                        const char *optstring, const struct option *longopts) {
@@ -2557,6 +2917,163 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
     int c;
     while ((c = getopt_long(argc, argv, optstring, longopts, NULL)) != -1) {
         switch (c) {
+            case OPT_GAME_OSD: {
+                size_t count = sizeof(GAME_OSD_VALUES)
+                             / sizeof(GAME_OSD_VALUES[0]);
+                if (!parse_game_choice(optarg, GAME_OSD_VALUES, count,
+                                       &opts->game_osd, "--game-osd")) {
+                    return false;
+                }
+                break;
+            }
+            case OPT_GAME_UPSCALE: {
+                size_t count = sizeof(GAME_UPSCALE_VALUES)
+                             / sizeof(GAME_UPSCALE_VALUES[0]);
+                if (!parse_game_choice(optarg, GAME_UPSCALE_VALUES, count,
+                                       &opts->game_upscale,
+                                       "--game-upscale")) {
+                    return false;
+                }
+                break;
+            }
+            case OPT_GAME_POSTFX:
+                if (!parse_game_postfx(optarg, &opts->game_postfx)) {
+                    return false;
+                }
+                break;
+            case OPT_GAME_SHARP: {
+                unsigned v;
+                if (!parse_bounded_int(optarg, 0, 100, &v, "--game-sharp")) {
+                    return false;
+                }
+                opts->game_sharpen = (uint8_t) v;
+                opts->game_postfx |= GAME_POSTFX_SHARP;
+                break;
+            }
+            case OPT_GAME_NIGHT_BOOST: {
+                unsigned v;
+                if (!parse_bounded_int(optarg, 0, 100, &v,
+                                       "--game-night-boost")) {
+                    return false;
+                }
+                opts->game_night_boost = (uint8_t) v;
+                opts->game_postfx |= GAME_POSTFX_NIGHT;
+                break;
+            }
+            case OPT_GAME_SATURATION: {
+                unsigned v;
+                if (!parse_bounded_int(optarg, 0, 200, &v,
+                                       "--game-saturation")) {
+                    return false;
+                }
+                opts->game_saturation = (uint8_t) v;
+                opts->game_postfx |= GAME_POSTFX_SAT;
+                break;
+            }
+            case OPT_GAME_CONTRAST: {
+                unsigned v;
+                if (!parse_bounded_int(optarg, 0, 200, &v,
+                                       "--game-contrast")) {
+                    return false;
+                }
+                opts->game_contrast = (uint8_t) v;
+                opts->game_postfx |= GAME_POSTFX_CONTRAST;
+                break;
+            }
+            case OPT_GAME_BRIGHTNESS: {
+                unsigned v;
+                if (!parse_bounded_int(optarg, 0, 200, &v,
+                                       "--game-brightness")) {
+                    return false;
+                }
+                opts->game_brightness = (uint8_t) v;
+                opts->game_postfx |= GAME_POSTFX_BRIGHTNESS;
+                break;
+            }
+            case OPT_GAME_GAMMA: {
+                unsigned v;
+                // 0 would divide by gamma, and a "black picture" setting has no
+                // use here, so the range starts where the curve is still sane
+                if (!parse_bounded_int(optarg, 25, 200, &v, "--game-gamma")) {
+                    return false;
+                }
+                opts->game_gamma = (uint8_t) v;
+                opts->game_postfx |= GAME_POSTFX_GAMMA;
+                break;
+            }
+            case OPT_GAME_BORDERLESS_FULLSCREEN:
+                opts->game_borderless_fullscreen = true;
+                break;
+            case OPT_GAME_LOW_LATENCY:
+                opts->game_low_latency = true;
+                break;
+            case OPT_GAME_FILTER_OVERLAY:
+                opts->game_filter_overlay = true;
+                break;
+            case OPT_GAME_OVERLAY_VISIBLE:
+                opts->game_overlay_visible = true;
+                break;
+            case OPT_GAME_OVERLAY_HOTKEY:
+                opts->game_overlay_hotkey = optarg;
+                opts->game_filter_overlay = true;
+                break;
+            case OPT_GAME_FILTER_PROFILES:
+                opts->game_overlay_profiles = optarg;
+                opts->game_filter_overlay = true;
+                break;
+            case OPT_GAME_OVERLAY_ENGLISH:
+                opts->game_overlay_english = true;
+                break;
+            case OPT_GAME_TELEMETRY_LOG:
+                opts->game_telemetry_log = true;
+                break;
+            case OPT_GAME_CURSOR_AUTOHIDE: {
+                unsigned v;
+                if (!parse_bounded_int(optarg, 0, 60000, &v,
+                                       "--game-cursor-autohide")) {
+                    return false;
+                }
+                opts->game_cursor_autohide_ms = v;
+                break;
+            }
+            case OPT_GAME_TOUCH_VISUALIZER:
+                opts->game_touch_visualizer = true;
+                break;
+            case OPT_GAME_FRAME_BRIDGE:
+                opts->game_frame_bridge = optarg;
+                break;
+            case OPT_GAME_AUDIO_BRIDGE:
+                opts->game_audio_bridge = optarg;
+                break;
+            case OPT_GAME_AUDIO_PCM:
+                opts->game_audio_pcm = optarg;
+                break;
+            case OPT_GAME_BRIDGE_SCALE:
+                if (!parse_bridge_size(optarg, &opts->game_bridge_w,
+                                       &opts->game_bridge_h)) {
+                    return false;
+                }
+                break;
+            case OPT_GAME_BRIDGE_FILTER: {
+                size_t count = sizeof(GAME_BRIDGE_FILTER_VALUES)
+                             / sizeof(GAME_BRIDGE_FILTER_VALUES[0]);
+                if (!parse_game_choice(optarg, GAME_BRIDGE_FILTER_VALUES,
+                                       count, &opts->game_bridge_filter,
+                                       "--game-bridge-filter")) {
+                    return false;
+                }
+                break;
+            }
+            case OPT_GAME_WINDOW_FILTER: {
+                size_t count = sizeof(GAME_WINDOW_FILTER_VALUES)
+                             / sizeof(GAME_WINDOW_FILTER_VALUES[0]);
+                if (!parse_game_choice(optarg, GAME_WINDOW_FILTER_VALUES,
+                                       count, &opts->game_window_filter,
+                                       "--game-window-filter")) {
+                    return false;
+                }
+                break;
+            }
             case 'b':
                 if (!parse_bit_rate(optarg, &opts->video_bit_rate)) {
                     return false;
@@ -3070,8 +3587,9 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
         opts->video = false;
     }
 
-    if (opts->audio && !opts->audio_playback && !opts->record_filename) {
-        LOGI("No audio playback, no recording: audio disabled");
+    if (opts->audio && !opts->audio_playback && !opts->record_filename
+            && !opts->game_audio_bridge && !opts->game_audio_pcm) {
+        LOGI("No audio playback, no recording, no audio bridge: audio disabled");
         opts->audio = false;
     }
 
