@@ -875,3 +875,40 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   content rectangle; the device-side `--show-touches` (system setting) is a
   different, device-rendered feature and is not enabled by this fork.
 * No DirectShow virtual camera (§8).
+
+## 12. Troubleshooting: pantalla gris / "No responde"
+
+If the mirror window opens grey and Windows marks it "No responde", run these
+three commands from `dist\GamingScrcpy\scrcpy` and read the log. They are the
+bisection that found the current bug, so they also find the next one.
+
+```
+# (b) minimal fork: no panel, no OSD, no filters
+scrcpy.exe --video-codec=h264 --render-driver=direct3d11 --game-telemetry-log
+
+# (d) codec matrix: one of these three is the grey one, if it is the codec
+scrcpy.exe --video-codec=h265 --game-telemetry-log
+scrcpy.exe --video-codec=av1  --game-telemetry-log
+
+# (e) renderer matrix
+scrcpy.exe --render-driver=opengl --game-telemetry-log
+scrcpy.exe --render-driver=vulkan --game-telemetry-log
+```
+
+`--game-telemetry-log` prints one line per second (`INFO: telemetry: fps=…`).
+No lines at all means no frame was ever presented, which is the grey screen;
+lines with `fps≈60` mean the picture is live and a complaint is about something
+else. As of v4 the fork will not let you sit in front of a grey window: if the
+mirror has not presented its first frame within 5 s it logs
+
+```
+ERROR: video-stalled: no frame 5000 ms after the mirror opened, the decoder never delivered
+```
+
+and closes the session by itself, so the launcher returns to the device list.
+`--game-stall-timeout=off` turns that off, `--game-stall-timeout=8000` relaxes it
+(a phone with its screen off still delivers a first frame, so this never kills an
+idle device). Gate §22 (`tools/stall_test.sh`) keeps all of that honest: the
+filter panel must not cost the mirror its first frame, a session shorter than its
+stall timeout must end by itself saying why, and `--no-playback` recordings —
+which never paint by design — must never be watched.

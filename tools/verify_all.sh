@@ -749,6 +749,24 @@ while IFS= read -r line; do
 done <<< "$scan"
 [ "$scan_rc" -eq 0 ] || bad "auto-scan probe exited $scan_rc"
 
+head_ "22. graceful failure: the panel keeps the picture, a dead mirror ends itself"
+# v4 §1.3. The user's grey window was the filter panel's second SDL window built
+# before the mirror had painted its first frame; the fork now creates it only when
+# the panel is opened, and arms a watchdog so a mirror that never paints reports
+# 'video-stalled' and exits instead of hanging. Four arms: the panel with the
+# hidden and the startup-visible request must paint, a timeout shorter than the
+# device needs must fire and end the process, the default timeout must not touch a
+# healthy session, and --no-playback (which never paints by design) must not be
+# watched at all. Needs a device: without one the session fails for another reason,
+# so the section reports SKIP with the commands to run by hand.
+stall="$(bash "$ROOT/tools/stall_test.sh" 2>&1)"
+stall_rc=$?
+case $stall_rc in
+    0) ok "graceful failure: every arm behaved" ;;
+    2) printf '  \033[33mnote\033[0m  %s\n' "SKIP: $(echo "$stall" | sed -n '1p')" ;;
+    *) bad "graceful failure: see the arms below"; echo "$stall" ;;
+esac
+
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

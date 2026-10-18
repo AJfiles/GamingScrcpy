@@ -2943,3 +2943,57 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/launcher_uiauto.ps1
 # everything above as one gate (89 checks, exits non-zero on any failure)
 bash tools/verify_all.sh
 ```
+
+### 5.1ar. v4 §1 — the grey "No responde" window: root cause, fix, gate §22
+
+Root cause, established by bisection on the S23 Ultra (`<dev-id-1>`,
+`out/bug_gray/bisect.sh` drop-one table): starting a session with the filter
+panel enabled makes the client never present a first frame. Measured with
+`--game-telemetry-log`, which prints one line per second of *painted* video:
+
+| arm | telemetry lines in 8 s | `IsHungAppWindow` |
+|---|---|---|
+| `--video-codec=h264` alone | 9–12 | false |
+| `--video-codec=h264 --game-filter-overlay` (v3 behaviour) | **0** | **true** |
+
+The launcher's hosting was ruled out first: redirecting the child's stderr to a
+file reproduces the hang identically (`tools/parent_mode_probe.ps1`, all three
+parent modes), and the log panel is only 148–251 bytes in a hung session, so
+neither the pipes nor `Dispatcher.Invoke` nor the codec, the frame bridge,
+upscaling, low-latency, telemetry or the failed `RegisterHotKey` (error 1409)
+cause it. What remains is the panel's own second SDL window plus its software
+renderer existing before the mirror has painted: with the window created
+lazily — on the first show, from the main loop — the same command line paints
+60 fps.
+
+Shipped in this step:
+
+* `app/src/overlay.c`: the panel window and renderer are built by
+  `overlay_ensure_window()` on the first show instead of in
+  `_create()`; `sc_gaming_overlay_tick()` creates it, `set_visible()` only
+  records the request (an event watch must not create windows while SDL is
+  pumping), and `sc_gaming_overlay_destroy()` now also cleans up a panel that
+  was never shown. `--game-overlay-visible` is refused with a warning, because
+  asking for the panel before the first paint is exactly the state that costs
+  the picture (gate §22, `panel-shown` arm).
+* `app/src/gaming.c` + `cli.c` + `options.h` + `scrcpy.c`: the stall watchdog
+  (`--game-stall-timeout=…`, default 5000 ms, `off` disables). It waits only
+  for the *first* frame, so an idle or asleep phone is never killed; it logs
+  `ERROR: video-stalled: no frame …ms after the mirror opened`, raises the
+  decoder-error event the session already handles, and exits by itself after
+  2 s if the main loop cannot service it. It is never armed without video
+  playback — measured before the guard: `--no-playback --record` never paints
+  by design and the first version killed a valid recording.
+* `tools/stall_test.sh` (gate §22, five arms) and `tools/verify_all.sh` §22,
+  SKIP-safe without a device. The liveness probe counts `scrcpy.exe` rows in
+  the Windows process table because bash's `$!` is an MSYS2 pid that `tasklist`
+  does not know — the bug that made the first version of this gate report a
+  false FAIL for the control arm.
+* `README_GAMING.md` §12: the (b)/(d)/(e) self-diagnosis commands and the
+  `video-stalled` message.
+
+Still open in §1: the exact SDL call inside the panel's startup that starves
+the first frame. It is no longer reachable through any supported command line,
+and the watchdog now bounds any future variant, so it is documented rather than
+chased. `--game-overlay-visible` therefore no longer shows the panel at
+startup; the hotkey does, once the session is painting.

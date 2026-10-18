@@ -96,7 +96,7 @@ function Stats($vals) {
     return @{ mean = [Math]::Round($mean, 1); sd = [Math]::Round($sd, 1) }
 }
 
-function Diff($a, $b) {
+function DiffStats($a, $b) {
     $n = [Math]::Min($a.bytes.Length, $b.bytes.Length)
     $diff = 0; $maxd = 0
     for ($i = 0; $i -lt $n; $i += 37) {
@@ -160,15 +160,24 @@ try {
         $c2 = Capture $h
         $st = Stats $c1.vals
         $d = @{ changed = -1; max = -1 }
-        if ($c2 -ne $null) { $d = Diff $c1 $c2 }
+        if ($c2 -ne $null) { $d = DiffStats $c1 $c2 }
+        # The within-sample pair is taken milliseconds apart, so on a phone whose
+        # screen is nearly still it proves nothing: the first run of this probe
+        # called a frozen 1440x3088 frame "LIVE" because its pixels were textured
+        # and identical to two decimal places four seconds later. Compare against
+        # the previous sample too and name that state out loud.
+        $dp = @{ changed = -1; max = -1 }
+        if ($prev -ne $null) { $dp = DiffStats $prev $c1 }
         $hung = [GrayWin]::IsHungAppWindow($h)
         $live = if ($null -ne $d.changed) { [int]$d.changed -gt 20 } else { $false }
         $verdict = 'LIVE'
         if ($c1.w -le 300 -and $c1.h -le 300) { $verdict = 'NOFRAME' }
         elseif ($st.mean -lt 12) { $verdict = 'BLACK' }
         elseif ($st.sd -lt 6) { $verdict = 'FLAT' }
-        Write-Output ("RESULT {0} label={1} sample={2} mean={3} stdev={4} changed={5} maxdelta={6} moving={7} hung={8} window={9}x{10}" -f
-            $verdict, $Label, $s, $st.mean, $st.sd, $d.changed, $d.max, $live, $hung, $c1.w, $c1.h)
+        elseif ($s -gt 0 -and [int]$dp.changed -le 2) { $verdict = 'FROZEN' }
+        Write-Output ("RESULT {0} label={1} sample={2} mean={3} stdev={4} changed={5} maxdelta={6} moving={7} sinceprev={8} still={9} hung={10} window={11}x{12}" -f
+            $verdict, $Label, $s, $st.mean, $st.sd, $d.changed, $d.max, $live, $dp.changed,
+            ([int]$dp.changed -le 2), $hung, $c1.w, $c1.h)
         if ($OutDir -and $s -eq 0 -and $c2) {
             $bmp = New-Object System.Drawing.Bitmap($c1.w, $c1.h, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
             $rect = New-Object System.Drawing.Rectangle(0, 0, $c1.w, $c1.h)

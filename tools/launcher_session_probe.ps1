@@ -30,6 +30,25 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class CmdLine {
+  [DllImport("shell32.dll", SetLastError = true)]
+  static extern IntPtr CommandLineToArgvW([MarshalAs(UnmanagedType.LPWStr)] string s, out int argc);
+  [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr h);
+  public static string[] Split(string cmdLine) {
+    int n; IntPtr argv = CommandLineToArgvW(cmdLine, out n);
+    if (argv == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+    string[] outp = new string[n];
+    for (int i = 0; i < n; i++) {
+      outp[i] = Marshal.PtrToStringUni(Marshal.ReadIntPtr(argv, i * IntPtr.Size));
+    }
+    LocalFree(argv);
+    return outp;
+  }
+}
+"@
 
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $exe = Join-Path $root 'dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe'
@@ -52,6 +71,12 @@ function Press($win, $id) {
 function Text($win, $id) {
     $el = ById $win $id
     if (-not $el) { return '' }
+    # A WPF TextBox carries its content in the Value pattern, not in Name; reading
+    # Name returned an empty log once and made the launcher look silent.
+    try {
+        $v = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+        if ($v) { return $v.Current.Value }
+    } catch { }
     return $el.Current.Name
 }
 
@@ -112,6 +137,26 @@ try {
         exit 1
     }
     Write-Output "note  launcher started scrcpy pid=$($child.Id)"
+
+    # The exact argv the launcher built, taken from the running child. This is the
+    # only way to know what the GUI actually asked for: the CLI protocol in v4 §1.2
+    # guessed at a command line, and a guess cannot convict anyone. WMI is queried in
+    # a retry loop because a child that dies fast loses the race.
+    $cmd = ''
+    for ($i = 0; $i -lt 10 -and -not $cmd; $i++) {
+        $w = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$($child.Id)" `
+             -ErrorAction SilentlyContinue
+        if ($w -and $w.CommandLine) { $cmd = $w.CommandLine } else { Start-Sleep -Milliseconds 300 }
+    }
+    $argvFile = Join-Path $root (Join-Path $OutDir "$Label.argv.txt")
+    if ($cmd) {
+        $cmd | Out-File -Encoding utf8 (Join-Path $root (Join-Path $OutDir "$Label.cmdline.txt"))
+        $argv = [CmdLine]::Split($cmd)
+        $argv | Out-File -Encoding utf8 -Width 4096 $argvFile
+        Write-Output "note  argv captured to $Label.argv.txt ($($argv.Count) elements)"
+    } else {
+        Write-Output 'note  argv NOT captured (child died before WMI answered)'
+    }
 
     $probe = Join-Path $root 'tools\gray_probe.ps1'
     & $probe -Exe $exe -AttachPid $child.Id -Label "z_$Label" -OutDir (Join-Path $root $OutDir) `
