@@ -17,6 +17,9 @@ public partial class MainWindow : Window
     // where the log stood when the audio diagnostic started, so it cannot quote
     // its own lines back as "what the server said"
     private int _diagLogMark = -1;
+    private System.Windows.Threading.DispatcherTimer? _autoScan;
+    private string _deviceSignature = "";
+    private bool _scanning;
 
     public MainWindow()
     {
@@ -34,6 +37,43 @@ public partial class MainWindow : Window
         _ready = true;
         RefreshLabels();
         UpdateCommandPreview();
+        // Plugging the phone in after the launcher was already open used to need
+        // a click on "Rescan ADB". The tick is gated on the window being
+        // foreground and on no mirror running, so it never polls while the user
+        // is elsewhere and never disturbs a live session.
+        _autoScan = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(3)
+        };
+        _autoScan.Tick += OnAutoScanTick;
+        _autoScan.Start();
+    }
+
+    private async void OnAutoScanTick(object? sender, EventArgs e)
+    {
+        if (!_ready || !IsActive || _scanning) return;
+        if (_scrcpy is { HasExited: false }) return;
+        _scanning = true;
+        try
+        {
+            var devices = await Adb.ListDevicesAsync();
+            var signature = string.Join("|",
+                devices.Select(d => $"{d.Serial}:{d.State}"));
+            // Only a real change repaints: an unchanged list must not move the
+            // selection the user made, and must not fill the run log.
+            if (signature != _deviceSignature) await RefreshDevicesAsync();
+        }
+        catch (Exception ex)
+        {
+            // An exception escaping a timer tick kills the process, and a
+            // missing adb would do it every three seconds: say so once, stop.
+            _autoScan?.Stop();
+            Log(Loc.Format("LogAutoScanStopped", ex.Message));
+        }
+        finally
+        {
+            _scanning = false;
+        }
     }
 
     private static string Shorten(string path) =>
@@ -394,6 +434,7 @@ public partial class MainWindow : Window
     {
         Log(Loc.T("LogScanning"));
         _devices = await Adb.ListDevicesAsync();
+        _deviceSignature = string.Join("|", _devices.Select(d => $"{d.Serial}:{d.State}"));
         DeviceCombo.Items.Clear();
         foreach (var d in _devices)
         {

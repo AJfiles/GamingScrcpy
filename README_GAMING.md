@@ -53,6 +53,13 @@ build, write `%APPDATA%\GamingScrcpy\settings.json`:
    **● Mirror + auto-record (dual mode)**.
 4. In the mirror window use the runtime shortcuts (§5).
 
+While its window is in the foreground and no session is running, the launcher
+repeats that same read-only scan every 3 s: plugging the phone in after the
+launcher is already open needs no click, and **Rescan ADB** still works when you
+want one immediately. It never repaints an unchanged device list (your selection
+and the run log stay put) and it stops by itself if `adb` disappears — the log
+then says to use **Rescan ADB**.
+
 Wireless: **Pair wireless** (Android 11+ → Wireless debugging → Pair device →
 enter `ip:port` + 6-digit code), then **Connect ip:port**. For older devices use
 **Enable ADB over TCP/IP** while still on USB, then connect to `ip:5555`.

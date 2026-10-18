@@ -730,6 +730,25 @@ if [ "$tf_rc" -ne 0 ] && printf '%s' "$tf" | grep -q 'brushes named Accent'; the
 else
     bad "theme audit did not fail on the broken fixture (rc=$tf_rc)"
 fi
+
+head_ "21. the launcher re-scans while it is in the foreground (tools/autoscan_probe.ps1)"
+# v3 §6: plugging the phone in after the launcher is open must not need a click
+# on Rescan ADB. The poll is invisible by design -- an unchanged device list must
+# not move the user's selection, disturb a live mirror or fill the run log -- so
+# the check counts the adb children it starts while the window is foreground. The
+# threshold is a floor, and the demonstrated failure is the build that shipped
+# without the timer: 0 children in the same 24 s window.
+scan="$(powershell -NoProfile -ExecutionPolicy Bypass -File "$ROOT/tools/autoscan_probe.ps1" 2>&1)"
+scan_rc=$?
+while IFS= read -r line; do
+    case "$line" in
+        OK\ *)   ok "${line#OK }" ;;
+        FAIL\ *) bad "${line#FAIL }" ;;
+        note\ *) note "${line#note }" ;;
+    esac
+done <<< "$scan"
+[ "$scan_rc" -eq 0 ] || bad "auto-scan probe exited $scan_rc"
+
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

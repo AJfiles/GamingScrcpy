@@ -444,6 +444,9 @@ namespace GamingScrcpyLauncher
             new[] { "ConfirmTitle", "Confirmar", "Confirm" },
             new[] { "LogScanning", "escaneando dispositivos adb", "scanning adb devices" },
             new[] { "LogDetected", "detectado: {0} estado={1}", "detected: {0} state={1}" },
+            new[] { "LogAutoScanStopped",
+                    "auto-reescaneo detenido: {0} (usa Reescanear ADB)",
+                    "auto-rescan stopped: {0} (use Rescan ADB)" },
             new[] { "LogDeviceModel", "modelo del dispositivo: {0}", "device model: {0}" },
             new[] { "LogAv1Fallback",
                     "AV1 no existe en SDK {0}: se ha cambiado a h264 para que "

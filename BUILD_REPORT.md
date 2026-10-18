@@ -15,7 +15,7 @@ something could not be measured, it says so.
 | Runtime DLLs | `dist\GamingScrcpy\scrcpy\*.dll` | collected from `ldd scrcpy.exe` (SDL3, avcodec-63, avformat-63, avutil-61, swresample-7, swscale-10, libusb-1.0 + transitive deps) |
 | adb | `dist\GamingScrcpy\scrcpy\adb.exe`, `…\launcher\adb.exe` | Google platform-tools |
 | Validation harnesses | `dist\GamingScrcpy\scrcpy\gamingdemo.exe`, `…\recorderintegrity.exe` | built from `app/tests/gaming_demo.c` and `app/tests/recorder_integrity.c`; both are host-side only and ship for reproducibility |
-| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,201,480 bytes (rebuilt for the v3 §3 shortcut table in §5.1al and again for the §4 theme pass in §5.1am, the byte size unchanged), window verified on screen, the shortcut panel read back through UI Automation in both languages, and the theme audited by section 20 |
+| Launcher | `dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe` | .NET 8 self-contained single file, 145,213,768 bytes (145,201,480 before PR 7's auto-rescan, §5.1ap; the §5.1al and §5.1am rebuilds did not change the size), window verified on screen, the shortcut panel read back through UI Automation in both languages, and the theme audited by section 20 |
 | Sources | `workspace\scrcpy` (fork), `launcher\` (C# WPF) | see §4 |
 | Validation tooling | `dist\GamingScrcpy\tools\*` (19 scripts + `fixtures\` + `theme\`) | the same scripts the gate runs, shipped so §7 is reproducible from the package alone: `bash tools/recorder_integrity_test.sh`, `bash tools/render_driver_test.sh`, `bash tools/fx_pixel_test.sh` and `bash tools/theme_audit.sh` all pass inside an extracted package, because each finds its binary next to `scrcpy.exe` (or its inputs under `tools\theme\`) when there is no build tree |
 | Distributable package | `dist\GamingScrcpy-win64-fork.zip` | 126,403,344 bytes on the archive rebuilt for PR-6 (the two earlier repacks measured 126,357,530 and 126,357,592) — ≈120.5 MiB either way, and the copy of this report inside the archive can only ever carry the figure from the previous repack, because the report is inside its own archive; `Expand-Archive` into an empty directory yields **148 files under 5 directories** (`launcher\`, `scrcpy\`, `tools\`, `tools\fixtures\`, `tools\theme\`), counted from the extraction rather than from an entry list. The earlier text claimed 153 files under 7 directories, then 138, then 140, then 145; every one of those is superseded by the count measured here. The package before that carried 160: seven stray `e3.txt`/`out.txt`/`err*.txt` adb redirects left behind by the §5.1ab debugging were shipping inside `launcher\`, and they are now deleted from `dist\`. Built with `Compress-Archive` from `dist\GamingScrcpy\*`. The size shifts by a few hundred bytes each repack because this report is inside its own archive: the copy in the zip is the previous one and still carries the older number. The `tools\` tree travels with the package (22 files + `fixtures\` + `theme\`), so a user can re-run the pixel assertions, the filter checks, the latency matrix and the theme audit without a build tree. Verified from that extraction, all exit 0: `bash tools/recorder_integrity_test.sh 30 320x180` (11 cases, `OK`, dual-120fps `frames=120`), `bash tools/fx_pixel_test.sh` (`FXPIXEL OK`), `bash tools/overlay_test.sh` (`OVERLAY OK`, paired Δmedian -0.004 ms, Δp99 +0.312 ms), `powershell tools/launcher_uiauto.ps1` (`UIAUTO OK`, every tab walked and its controls found by automation id), `powershell tools/launcher_tab_shot.ps1 -Tab 0` (window captured), `bash tools/theme_audit.sh` (`THEME OK pairs=15`) with its broken-palette fixture failing as required (`THEME FAIL issues=4`, exit 1), `launcher\GamingScrcpyLauncher.exe --validate-profiles` (`ALL PROFILES VALID`, `PASS invalid overlay hotkey dropped`), `launcher\GamingScrcpyLauncher.exe --validate-shortcuts` (`SHORTCUTS OK rows=29 categories=4`) with its duplicate-key fixture — `--validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"` — failing as required (`SHORTCUTS FAIL issues=2`, exit 1). The render-driver sweep and `tools/shortcuts_table_test.ps1` travel in `tools\` but were last executed from the build tree by gate sections 6 and 17, not from this extraction |
@@ -2591,16 +2591,19 @@ half-truth. Cost is in working minutes for someone who knows this tree.
 | Health check general (SDK, audio, códec, renderer, latencia esperada) | **partly shipped.** *Diagnóstico de audio* covers SDK, support, the server's own refusal line, sink state and device volume. The renderer and latency numbers are measured by `tools/render_driver_test.sh` and `tools/device_latency_matrix.sh` and recorded here, not surfaced in the window. There is no single panel that says all five. | ~90 min to compose the existing probes into one panel. Benefit is presentation, not information: every number it would show is already reachable. **Backlog, low value.** |
 | Indicador "audio activo" | **not the same thing as what exists.** `TxtAudioBadge` reports *support* (`compatible` / `NO SOPORTADO (needs Android 11+)`) from the SDK; nothing reports that a stream is flowing now. | ~2 h and it needs a real signal: the client would have to surface decoded-audio counters, which is a C-side change plus a gate check on a device this host does not have (Android 11+). Until then a WPF-side "active" lamp would be exactly the silently-lying control §1.2 forbids. **Backlog, blocked on hardware.** |
 | Preset "Presentation mode" (borderless + always-on-top + OSD mínimo + filtros, un click) | **reachable but not one click.** Every ingredient is a config field, and the 11 session profiles carry combinations of them. | ~40 min: one button that sets four fields and starts. Real value for the streaming use case, no new risk (the same flags are already validated by `--validate-profiles`). **Candidate for the next PR.** |
-| Auto-detección cada 3 s en foreground | **not implemented.** `grep -rn "DispatcherTimer" launcher/*.cs` returns nothing; the list fills on `Loaded` and on the *Rescan ADB* button. | ~30 min (a timer gated on `IsActive`, reusing `RefreshDevicesAsync`). Benefit is visible every day the phone is plugged in after the launcher is open. The cost is a periodic `adb devices`, which the read-only rules already allow and gate §14 already pins. **Candidate for the next PR.** |
+| Auto-detección cada 3 s en foreground | **shipped in PR 7 (§5.1ap).** A `DispatcherTimer` gated on `IsActive` and on no live session re-runs the same read-only scan, and repaints only when a `serial:state` signature differs from the last one. `tools/autoscan_probe.ps1` counts its `adb.exe` children and gate section 21 pins the result. | estimated ~30 min, and that held. The cost is a periodic `adb devices`, which the read-only rules already allow and gate §14 already pins. |
 | Última config + botón "Relaunch" | **half shipped.** The settings are persisted under `%APPDATA%\GamingScrcpy` and reloaded at start — the window came back in the language and with the device selected in the previous session — so the last configuration *is* the startup configuration. There is no "relaunch the session I just closed" button. | ~1 h for a button that re-arms the last device and profile. Moderate value, small surface. **Backlog.** |
 | Cerrar el defecto #20 (borderless al arranque) | **open, and narrowed.** `--game-borderless-fullscreen` now logs `Borderless fullscreen on (WxH)` and `tools/window_style_probe.ps1` proves the caption bits are cleared, but the first frame still resizes the window back to the content size afterwards. | ~3 h in `screen.c`/`scrcpy.c` ordering, in the file the upstream-diff invariant (§13) watches most closely. Deferred deliberately: it is the one remaining change that can break the "never alter what the device renders" rule. |
 | Customización de hotkeys desde la UI (persistente) | **shipped.** `RefreshKeymaps()` feeds a keymap editor whose result lands in `cfg.ShortcutMods` and is emitted as `--shortcut-mod=…`, persisted in the same JSON. The filter panel's own `Super+Alt+F` became editable in this PR. | nothing left to build. |
 
-Two of the seven are therefore already done, two are ~1 hour of work with real
-daily value and no new risk, and three are either presentation-only or blocked on
-hardware and on the §13 invariant. That ordering is the reason the two cheap ones
-were *not* folded into this PR: §7.2 asks for one feature per commit, and PR-6 is
-already the largest of the round.
+Two of the seven were already shipped when this table was written (the hotkey
+editor, and the persisted last configuration); the 3 s foreground re-scan joined them
+in PR 7 (§5.1ap). Presentation mode — the second of the two rows marked *candidate
+for the next PR* — is still open: ~40 min for one button that sets four fields
+already validated by `--validate-profiles`. The rest are either presentation-only or
+blocked on hardware and on the §13 invariant. Neither cheap item was folded into
+PR-6: §7.2 asks for one feature per commit, and PR-6 is already the largest of the
+round.
 
 The triage also turned up one dead row: `TabPerf` ("Rendimiento" / "Performance")
 is still a `Loc.cs` key but no XAML uses it — the v3 tab consolidation folded the
@@ -2609,7 +2612,56 @@ to the user and to the key-parity check (the key exists in both languages), so i
 is recorded here rather than silently deleted, next to the same class of leftover
 the duplicate-key count in §15 catches.
 
+### 5.1ap. PR 7 — the launcher notices the phone without being asked
 
+The first of the two cheap §6 candidates shipped: a `DispatcherTimer` ticks every
+3 s and re-runs the device scan, but only while the window is in the foreground
+and no mirror is running (`IsActive`, `_scrcpy is { HasExited: false }`), and it
+repaints only when the list actually changed — a `serial:state` signature compared
+against the last scan. All three guards come from the same rule that killed the
+dead audio checkbox in §1.2: a background poll that moves the selection the user
+made, disturbs a live session or fills the run log is a worse feature than no
+feature. If `adb` goes missing the tick logs the reason once and stops itself
+rather than throwing from a timer, which would take the process down.
+
+**How an invisible behaviour gets measured.** Nothing on screen changes when the
+list is unchanged, so `tools/autoscan_probe.ps1` counts the only external trace a
+poll leaves: the short-lived `adb.exe` children the launcher starts while its
+window is foreground. Counting begins 1.5 s after the window appears, so the
+startup refresh cannot be mistaken for a tick. The instrument under-counts — a
+child can be born and gone between two 200 ms WMI samples, and the first 12 s run
+saw 2 of the ~4 expected ticks — so the window is 24 s (8 ticks) against a
+threshold of 3, and what is asserted is the separation, not the rate. Gate section
+21 runs it; the pass printed:
+
+```
+note  4 adb children in 24s, window foreground=True
+OK auto-scan polled repeatedly: 4 adb children (threshold 3)
+AUTOSCAN OK
+```
+
+Its failure mode is demonstrated rather than assumed: the same probe against the
+package that shipped without the timer printed `note 0 adb children in 24s` and
+`FAIL only 0 adb children in 24s: the timer is not firing (threshold 3)`. The
+narrower 12 s window failed on the *new* build too (2 children), which is how the
+under-count was found — the check went red before it was trusted.
+
+**What the gate caught on the way.** The first PR-7 run failed *outside* its own new
+section: §15 (no user-visible literal left in the code-behind) flagged the
+`Log($"auto-scan stopped: {ex.Message}")` line the timer writes when `adb` goes
+missing. The new feature's own error path was the one string in that file that had
+never been localised, and it went in unnoticed until a section written two PRs
+earlier crossed it. It is now `LogAutoScanStopped`, ES *auto-reescaneo detenido: {0}
+(usa Reescanear ADB)* / EN *auto-rescan stopped: {0} (use Rescan ADB)*, worded to
+match the existing `BtnRescan` label rather than inventing a third name for the same
+button. A check added for one feature guards every later one, which is the argument
+for keeping them rather than trusting that nobody writes a literal.
+
+The scan is the same read the button performs: `adb devices` plus the read-only
+`getprop` calls for model, release and SDK. Nothing is written to the phone, and
+`out/dev/adb_audit.log` keeps the record of every command of the session.
+
+## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so
 the device-side claims below are narrower than they were. What this host still
