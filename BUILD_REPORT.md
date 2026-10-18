@@ -2702,6 +2702,25 @@ missed, and the threshold can then mean what it says. Until that lands, gate sec
 21 is evidence that the timer existed in the runs measured, not a trustworthy check —
 recorded here rather than quietly re-run until green.
 
+**Resolved the same evening, by measurement.** `tools/autoscan_probe.ps1` now
+subscribes to `Win32_ProcessStartTrace` and filters by parent pid instead of sampling
+`Win32_Process`, and re-asserts the foreground every second. Run against the very
+extraction that produced the failure above, the same launcher build reported:
+
+```
+note  16 adb children in 24s via event-subscription, window foreground=True
+OK auto-scan polled repeatedly: 16 adb children (threshold 3)
+AUTOSCAN OK
+```
+
+Sixteen starts in the window where sampling had seen one, with the same binary and
+the same warm adb server. So the timer had been firing correctly all along — each
+tick is `adb devices` plus the read-only `getprop` calls, which is why the count
+exceeds the 8 nominal ticks — and the only thing that had been wrong was the
+instrument. Section 21 is now an assertion rather than a lottery. The polling loop
+survives only as a declared fallback that prints `instrument=poll`, so a machine
+without the WMI trace provider degrades visibly instead of silently.
+
 **What the gate caught on the way.** The first PR-7 run failed *outside* its own new
 section: §15 (no user-visible literal left in the code-behind) flagged the
 `Log($"auto-scan stopped: {ex.Message}")` line the timer writes when `adb` goes
