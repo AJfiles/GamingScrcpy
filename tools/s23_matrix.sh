@@ -50,11 +50,17 @@ arm audio-raw       --video-codec=h264 --audio-codec=raw
 arm filter-panel    --video-codec=h264 --game-filter-overlay
 arm lowlat-120      --video-codec=h264 --max-fps=120 --game-low-latency
 
-# the PCM tap: bytes must arrive on the named pipe while the mirror runs
+# the PCM tap: bytes must arrive on the named pipe while the mirror runs.
+# --audio-codec=raw because the tap decodes what the device sends, and the opus
+# arm measured a_kbps=0 on this unit: with opus the tap had nothing to write.
+# The probe counts the bytes Read() actually returned (tools/pcm_pipe_probe.ps1);
+# the first version added a fixed 65536 per call and could invent a pass.
 tap="$out/pcm_bytes.txt"
 rm -f "$tap"
-( powershell -NoProfile -Command "\$c=New-Object IO.Pipes.NamedPipeClientStream('.','gsc_pcm_probe','Async'); try{ \$c.Connect(9000); \$b=New-Object byte[] 65536; \$n=0; while(\$c.Read(\$b,0,\$b.Length) -gt 0){\$n+=65536; if(\$n -gt 200000){break}}; Write-Output \$n } catch { Write-Output 0 }" > "$tap" 2>/dev/null ) &
-"$exe" --serial="$serial" --video-codec=h264 --game-audio-pcm='\\.\pipe\gsc_pcm_probe' > "$out/pcm.log" 2>&1 &
+( powershell -NoProfile -ExecutionPolicy Bypass -File "$root/tools/pcm_pipe_probe.ps1" \
+    > "$tap" 2>/dev/null ) &
+"$exe" --serial="$serial" --video-codec=h264 --audio-codec=raw \
+    --game-audio-pcm='\\.\pipe\gsc_pcm_probe' > "$out/pcm.log" 2>&1 &
 sleep $((run + 2))
 taskkill //F //IM scrcpy.exe >/dev/null 2>&1
 wait 2>/dev/null
