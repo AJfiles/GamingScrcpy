@@ -2744,6 +2744,72 @@ The scan is the same read the button performs: `adb devices` plus the read-only
 `getprop` calls for model, release and SDK. Nothing is written to the phone, and
 `out/dev/adb_audit.log` keeps the record of every command of the session.
 
+### 5.1aq. v4 §1 — the grey "No responde" window reproduced, and it is the launcher's path, not the command line's
+
+The user's report was: another device, several profiles, the mirror stays grey,
+then the window goes "No responde" and has to be killed. v4 §1.2 forbids touching
+code before that is measured, so the S23 Ultra (`<dev-id-1>`, SM-S918B, Android 14,
+SDK 34, `real 1440 x 3088`, `mWakefulness=Awake` at the start of every probe) got
+wired to the protocol with an instrument instead of an eye: `tools/gray_probe.ps1`
+captures the window with `PrintWindow`, and classifies it from the numbers —
+`NOFRAME` if the window is still at SDL's 256x256 default (scrcpy resizes when the
+first frame decodes), `BLACK` if mean < 12, `FLAT` if stdev < 6, else `LIVE` — and
+reads `IsHungAppWindow` for the "No responde" part. `tools/launcher_session_probe.ps1`
+drives the real packaged GUI through UI Automation and measures the window **its**
+child process creates. Every device command went through `tools/adb_audit.sh`.
+
+Steps (a), (b), (d), (e) and (c) — `out/bug_gray/protocol.txt`, one row per config,
+`hung` is `IsHungAppWindow` during the samples:
+
+| config | verdict | mean / stdev | window | hung |
+|---|---|---|---|---|
+| (a) stock v5.0.1, h264, d3d11 | LIVE | 148,4 / 70,4 | 1270x592 | False |
+| (b) fork minimal, h264 | LIVE | 133,8 / 75 | 1270x592 | False |
+| (d) fork minimal, h265 | LIVE | 152,7 / 66,7 | 1270x592 | False |
+| (d) fork minimal, av1 | LIVE | 133,2 / 75,4 | 1269x591 | False |
+| (e) fork, opengl | LIVE | 137,2 / 72,3 | 1270x592 | False |
+| (e) fork, vulkan | LIVE | 121,3 / 74,5 | 1270x592 | False |
+| (c) + `--game-osd=full` | LIVE | 120,5 / 70,8 | 1270x592 | False |
+| (c) + `--game-window-filter=lanczos` | LIVE | 127 / 70,4 | 1270x592 | False |
+| (c) + `--game-postfx=contrast,sharp` | LIVE | 131,3 / 76,7 | 1270x592 | False |
+| (c) + `--game-low-latency` | LIVE | 141 / 73,2 | 1270x592 | False |
+| (c) + `--game-telemetry-log` | LIVE | 139,3 / 68,5 | 1270x592 | False |
+| (c) + bridge, no consumer | LIVE | 145,7 / 63,6 | 1270x592 | False |
+| (c) + audio opus / +PCM tap / +bridge | LIVE | 116,7 / 70,4 · 114,8 / 69,5 · 108,5 / 68,1 | 1270x592 | False |
+| (c) heaviest combination (lanczos+pixelart+osd+postfx+`--max-size=4096`) | LIVE | 138,6 / 71,5 | 1270x592 | False |
+| (c) + `--game-borderless-fullscreen` (± `--always-on-top`) | LIVE | 119,1 / 71,2 | 1270x592 | False |
+| **launcher Mirror, stored profile "4K Ultra Quality Stream 60FPS"** | **FLAT** | **34 / 0** | 1269x591 | **True** |
+
+So fifteen command-line configurations — including every codec, every render backend,
+the pipe bridges with no reader, the audio path and the borderless flag that v3 left
+open — mirror the phone correctly, while the launcher pressing its own Mirror button
+produces exactly the reported symptom: a flat grey frame (`stdev=0`, no texture at
+all, not even black) and a window Windows marks as not responding, on all four
+samples across 48 s. `out/bug_gray/z_launcher_session.png` is the screenshot.
+
+The hung session was characterised rather than assumed
+(`out/bug_gray/launcher_argv_dump.txt`): `scrcpy` pid 2224, `Responding=False`,
+26 threads, **total CPU 1,67 s over its whole life**, working set 58,7 MB, title
+`4K Ultra Quality Stream 60FPS`; the main thread parked in `Wait`, one worker at
+1000 ms, nothing spinning. Low CPU plus a parked main thread is a **blocking wait,
+not a busy loop and not a decoder chewing on a bad frame** — which rules out
+hypotheses 1 and 2 as the root cause and points at the child being stuck on an I/O
+the launcher owns. The prime suspect is the stdout/stderr pipe: the launcher mirrors
+scrcpy's output into its log panel, and a child that is writing (this profile runs
+with the telemetry/OSD/logging path hot) stops inside `WriteFile` the moment the
+64 KB pipe buffer fills and nobody drains it — grey frame, unresponsive window,
+idle CPU, process still alive. That test is the next thing to run, and it is cheap: start the child with
+`RedirectStandardError=true` and never read it, with the same flags, and check
+whether `hung` goes True. The first attempt at that A/B produced no reading at all
+(`$process.Responding` came back empty on a hand-built `System.Diagnostics.Process`
+object, which needs `Refresh()` or `Get-Process` to answer), so it measured nothing
+and **the backpressure hypothesis is still untested, not refuted and not confirmed**.
+It is written here as the next action precisely so it cannot be mistaken for a
+finding. Nothing is fixed yet, and nothing is claimed as fixed: §1.3's watchdog and
+gate §22 are written against the reproduction above, and the fix belongs to
+whichever side that test convicts -- the launcher must drain unconditionally, and the
+client should survive a writer that cannot write instead of stopping the render loop.
+
 ## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so
