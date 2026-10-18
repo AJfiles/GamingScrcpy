@@ -36,6 +36,7 @@ public partial class MainWindow : Window
         TxtAdbPath.Text = Shorten(Adb.ResolvePath());
         _ready = true;
         RefreshLabels();
+        UpdateProfileInfo();
         UpdateCommandPreview();
         // Plugging the phone in after the launcher was already open used to need
         // a click on "Rescan ADB". The tick is gated on the window being
@@ -178,6 +179,11 @@ public partial class MainWindow : Window
         FillStepBox(CboAudioBitrate, AudioBitrateSteps);
         FillStepBox(CboVideoBuffer, VideoBufferSteps);
         FillStepBox(CboAudioOutBuffer, AudioOutBufferSteps);
+        // the profile form edits the same three step lists, so it cannot offer a
+        // value the configurator or the binary would not accept
+        FillStepBox(CboFormBitrate, BitrateSteps);
+        FillStepBox(CboFormFps, FpsSteps);
+        FillStepBox(CboFormBuffer, VideoBufferSteps);
     }
 
     private static void FillStepBox(ComboBox box, int[] steps)
@@ -305,7 +311,7 @@ public partial class MainWindow : Window
         _cfg = c;
         _suppress = true;
         TxtProfileName.Text = c.Name;
-        SelectByValue(CboVideoCodec, c.VideoCodec, "h264", "hevc", "av1");
+        SelectByValue(CboVideoCodec, c.CodecChoice, "h264", "hevc", "av1");
         SelectByValue(CboAudioCodec, c.AudioCodec, "opus", "aac", "raw");
         SelectByValue(CboHwdec, c.Hwdec, "auto", "disabled", "d3d11va");
         SelectByValue(CboDriver, c.RenderDriver, "direct3d11", "opengl", "vulkan",
@@ -366,9 +372,12 @@ public partial class MainWindow : Window
         ChkPcmMute.IsChecked = c.PcmMutePlayback;
         TxtExtraArgs.Text = c.ExtraArgs;
         TxtMouseBindings.Text = c.MouseBindings;
+        ApplyForm(c);
         RefreshLabels();
         _suppress = false;
         UpdateCommandPreview();
+        UpdateProfileInfo();
+        SelectProfileRows();
     }
 
     private static void SelectByValue(ComboBox box, string value,
@@ -752,6 +761,9 @@ public partial class MainWindow : Window
             return;
         }
         TxtStatus.Text = Loc.T(noWindow ? "StatusRecording" : "StatusMirroring");
+        // the profile the header is showing is the one this session started with:
+        // picking another now only reaches the next launch, so say it here
+        UpdateProfilePendingHint();
         _scrcpy.OutputDataReceived += (_, ev) =>
         {
             if (ev.Data != null)
@@ -773,6 +785,7 @@ public partial class MainWindow : Window
         {
             string exit = ((int?) _scrcpy?.ExitCode)?.ToString() ?? "?";
             TxtStatus.Text = Loc.Format("StatusStoppedExit", exit);
+            UpdateProfilePendingHint();
             Log(Loc.Format("LogExitCode", exit));
             if (record && File.Exists(cfg.RecordPath))
             {
@@ -793,25 +806,319 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------
-    // profiles / keymaps
+    // profiles: the store, the two pickers and the form (v4 §2), then keymaps
     // ------------------------------------------------------------------
 
-    private void RefreshProfiles(string? select = null)
+    private List<ProfileEntry> _profileRows = new();
+
+    private string CurrentProfileFile =>
+        ProfileStore.SafeFileName(_cfg.Name) + ".json";
+
+    // Both pickers read the store through the same rows, so the header combo and
+    // the Perfiles table can never disagree about which profiles exist.
+    // adopt=false keeps what the screen holds: a rebuild for the language switch
+    // must not drop into row 0 and overwrite an unsaved profile.
+    private void RefreshProfiles(string? select = null, bool adopt = true)
     {
+        _profileRows = ProfileStore.ListEntries();
         ProfileList.Items.Clear();
-        foreach (var f in ProfileStore.ListProfiles())
+        CboProfile.Items.Clear();
+        foreach (var row in _profileRows)
         {
-            ProfileList.Items.Add(f);
+            ProfileList.Items.Add(row);
+            CboProfile.Items.Add(row);
         }
-        if (select != null)
+        var wanted = select ?? CurrentProfileFile;
+        var i = _profileRows.FindIndex(r => r.File == wanted);
+        if (i < 0 && adopt)
         {
-            ProfileList.SelectedItem = ProfileList.Items.Cast<string>()
-                .FirstOrDefault(x => x == select);
+            i = _profileRows.Count > 0 ? 0 : -1;
         }
-        else if (ProfileList.Items.Count > 0)
+        _suppress = true;
+        ProfileList.SelectedIndex = i;
+        CboProfile.SelectedIndex = i;
+        _suppress = false;
+        // Nothing on the screen corresponds to a row (a first run, or a deleted
+        // profile): show the row that was picked, as the single list used to.
+        if (adopt && i >= 0 && _profileRows[i].File != CurrentProfileFile
+                && _profileRows[i].Config is { } cfg)
         {
-            ProfileList.SelectedIndex = 0;
+            Apply(cfg);
         }
+        UpdateProfileInfo();
+    }
+
+    // Point the two pickers at whatever the screen already holds. Selection
+    // events are muted: each would re-apply its profile and throw away an edit
+    // the user has not saved.
+    private void SelectProfileRows()
+    {
+        var i = _profileRows.FindIndex(r => r.File == CurrentProfileFile);
+        _suppress = true;
+        ProfileList.SelectedIndex = i;
+        CboProfile.SelectedIndex = i;
+        _suppress = false;
+    }
+
+    // v4 §2.3: the footer line that says what the profile on the screen
+    // configures. The header combo, the table and a language switch all land
+    // here, because the text they show is the profile's localized description.
+    private void UpdateProfileInfo()
+    {
+        if (!_ready)
+        {
+            return;
+        }
+        var notes = _cfg.DisplayNotes;
+        TxtProfileInfo.Text = string.IsNullOrWhiteSpace(notes)
+            ? Loc.T("ProfileNoDesc")
+            : _cfg.DisplayName + " \u00b7 " + notes;
+    }
+
+    // A profile picked during a session takes effect when it is started again:
+    // the running mirror is never restarted by the selector, and that has to be
+    // said where the user is looking.
+    private void UpdateProfilePendingHint()
+    {
+        if (!_ready)
+        {
+            return;
+        }
+        TxtProfilePending.Visibility = _scrcpy is { HasExited: false }
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnHeaderProfileChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppress || CboProfile.SelectedItem is not ProfileEntry row)
+        {
+            return;
+        }
+        if (row.Config is { } cfg)
+        {
+            Apply(cfg);
+            Log(Loc.Format("LogProfileLoaded", cfg.DisplayName));
+        }
+        UpdateProfilePendingHint();
+    }
+
+    private ProfileEntry? SelectedProfileRow() =>
+        ProfileList.SelectedItem as ProfileEntry ?? CboProfile.SelectedItem as ProfileEntry;
+
+    private void OnProfileMenuEdit(object sender, RoutedEventArgs e) =>
+        EditProfileRow(SelectedProfileRow());
+
+    private void OnProfileMenuDuplicate(object sender, RoutedEventArgs e) =>
+        DuplicateProfileRow(SelectedProfileRow());
+
+    private void OnProfileMenuDelete(object sender, RoutedEventArgs e) =>
+        DeleteProfileRow(SelectedProfileRow());
+
+    // The table's three action buttons carry a machine token in Tag: their text
+    // is localized, so it cannot identify an action.
+    private void OnProfileRowAction(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string action } button
+            || button.DataContext is not ProfileEntry row)
+        {
+            return;
+        }
+        switch (action)
+        {
+            case "edit": EditProfileRow(row); break;
+            case "duplicate": DuplicateProfileRow(row); break;
+            case "delete": DeleteProfileRow(row); break;
+        }
+    }
+
+    private void EditProfileRow(ProfileEntry? row)
+    {
+        if (row?.Config is not { } cfg)
+        {
+            WarnNoProfile();
+            return;
+        }
+        MainTabs.SelectedItem = TabAdvancedItem;
+        Apply(cfg);
+        OpenProfileForm();
+        Log(Loc.Format("LogProfileEditing", cfg.DisplayName));
+    }
+
+    // A copy keeps the description -- it still says what the parameters do -- and
+    // drops the localized name, which belongs to the profile it was copied from.
+    private void DuplicateProfileRow(ProfileEntry? row)
+    {
+        if (row?.Config is not { } cfg)
+        {
+            WarnNoProfile();
+            return;
+        }
+        var name = Prompt(Loc.T("ProfDupTitle"), Loc.T("HintProfileName"),
+            cfg.DisplayName + " 2");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+        var copy = cfg.Clone();
+        copy.Name = name.Trim();
+        copy.NameEs = "";
+        var (ok, detail, _) = App.ValidateAgainstBinary(copy);
+        if (!ok)
+        {
+            RejectProfile(detail);
+            return;
+        }
+        ProfileStore.SaveProfile(copy);
+        RefreshProfiles(ProfileStore.SafeFileName(copy.Name) + ".json");
+        Log(Loc.Format("LogProfileDuplicated", copy.Name));
+    }
+
+    private void DeleteProfileRow(ProfileEntry? row)
+    {
+        if (row is null)
+        {
+            WarnNoProfile();
+            return;
+        }
+        if (MessageBox.Show(this, Loc.Format("ConfirmDeleteProfile", row.Display),
+                            Loc.T("ConfirmTitle"), MessageBoxButton.YesNo,
+                            MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        File.Delete(Path.Combine(ProfileStore.ProfilesDir, row.File));
+        RefreshProfiles();
+        Log(Loc.Format("LogDeleted", row.Display));
+    }
+
+    private void WarnNoProfile() =>
+        MessageBox.Show(this, Loc.T("ErrPickProfile"), Loc.T("ConfirmTitle"),
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+
+    private void RejectProfile(string detail)
+    {
+        Log(Loc.Format("ErrProfileInvalid", detail));
+        MessageBox.Show(this, Loc.Format("ErrProfileInvalid", detail), Loc.T("AskTitle"),
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private void OnRestoreProfiles(object sender, RoutedEventArgs e)
+    {
+        var count = ProfileStore.BuiltinProfiles().Count();
+        if (MessageBox.Show(this, Loc.Format("AskRestoreDefaults", count),
+                            Loc.T("ConfirmTitle"), MessageBoxButton.YesNo,
+                            MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        // A default set the packaged binary refuses must not be written over the
+        // user's store: this is the same check --validate-profiles runs.
+        foreach (var b in ProfileStore.BuiltinProfiles())
+        {
+            var (ok, detail, _) = App.ValidateAgainstBinary(b);
+            if (!ok)
+            {
+                RejectProfile($"{b.DisplayName} {detail}");
+                return;
+            }
+        }
+        var restored = ProfileStore.RestoreBuiltinProfiles();
+        RefreshProfiles();
+        Log(Loc.Format("LogProfileRestored", restored));
+    }
+
+    private void OnNewProfileForm(object sender, RoutedEventArgs e)
+    {
+        MainTabs.SelectedItem = TabAdvancedItem;
+        Apply(new AppConfig { Name = Loc.T("ProfileNew") });
+        OpenProfileForm();
+        Log(Loc.T("LogNewProfile"));
+    }
+
+    private void OpenProfileForm() => ProfileForm.Visibility = Visibility.Visible;
+
+    private void OnCloseProfileForm(object sender, RoutedEventArgs e) =>
+        ProfileForm.Visibility = Visibility.Collapsed;
+
+    private static readonly string[] FormResValues =
+        { "fit", "720p", "1080p", "1440p", "4k" };
+
+    // The form's fields are another view of the same AppConfig, so Apply writes
+    // them back and the save reads them out of one place only.
+    private void ApplyForm(AppConfig c)
+    {
+        SelectByValue(CboFormCodec, c.CodecChoice, "h264", "hevc", "av1");
+        SelectByValue(CboFormPreset, c.EncoderPreset,
+                      "default", "ultrafast", "fast", "medium");
+        SelectStep(CboFormFps, FpsSteps, c.MaxFps);
+        SelectStep(CboFormBitrate, BitrateSteps, c.BitrateMbps);
+        SelectStep(CboFormBuffer, VideoBufferSteps, c.VideoBufferMs);
+        ChkFormLowLatency.IsChecked = c.LowLatency;
+        TxtFormNotesEs.Text = c.NotesEs;
+        TxtFormNotesEn.Text = c.Notes;
+        var cap = c.HostCapLabel;
+        CboFormRes.SelectedIndex = Math.Max(0,
+            Array.FindIndex(FormResValues, v => string.Equals(
+                CapOfPreset(v), cap, StringComparison.OrdinalIgnoreCase)));
+        LblFormLatency.Text = Loc.Format("UnitMs", c.ExpectedLatencyMs);
+    }
+
+    // "1080p" is a preset token, "720p" is an explicit window size: the form
+    // shows one list, so the label of each entry is what a profile carries.
+    private static string CapOfPreset(string preset) => preset switch
+    {
+        "720p" => "720p",
+        _ => new AppConfig { HostPreset = preset }.HostCapLabel,
+    };
+
+    private void OnSaveProfileForm(object sender, RoutedEventArgs e)
+    {
+        var name = TxtProfileName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            MessageBox.Show(this, Loc.T("ErrProfileName"), Loc.T("AskTitle"),
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var cfg = Collect();
+        cfg.Name = name;
+        cfg.MaxFps = CbStep(CboFormFps, cfg.MaxFps);
+        cfg.BitrateMbps = CbStep(CboFormBitrate, cfg.BitrateMbps);
+        cfg.VideoBufferMs = CbStep(CboFormBuffer, cfg.VideoBufferMs);
+        cfg.VideoCodec = CbValue(CboFormCodec, "h264", "hevc", "av1");
+        cfg.EncoderPreset = CbValue(CboFormPreset, "default", "ultrafast", "fast", "medium");
+        cfg.LowLatency = ChkFormLowLatency.IsChecked == true;
+        cfg.Notes = TxtFormNotesEn.Text.Trim();
+        cfg.NotesEs = TxtFormNotesEs.Text.Trim();
+        // the resolution field only ever moves the host window: the device is
+        // never resized, which is the constraint gate 13 reads back
+        var res = CbValue(CboFormRes, FormResValues);
+        if (res == "720p")
+        {
+            cfg.HostPreset = "fit";
+            cfg.HostWidth = 1280;
+            cfg.HostHeight = 720;
+        }
+        else
+        {
+            cfg.HostPreset = res;
+            cfg.HostWidth = 0;
+            cfg.HostHeight = 0;
+        }
+        Apply(cfg);
+
+        TxtStatus.Text = Loc.T("StatusProfileChecking");
+        var (ok, detail, _) = App.ValidateAgainstBinary(cfg);
+        if (!ok)
+        {
+            RejectProfile(detail);
+            return;
+        }
+        cfg.FilterProfiles = ProfileStore.HarvestFilterProfiles();
+        ProfileStore.SaveProfile(cfg);
+        RefreshProfiles(ProfileStore.SafeFileName(cfg.Name) + ".json");
+        Log(Loc.Format("LogProfileSaved", cfg.DisplayName));
+        UpdateCommandPreview();
     }
 
     private void RefreshKeymaps()
@@ -829,37 +1136,38 @@ public partial class MainWindow : Window
 
     private void OnProfileSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (ProfileList.SelectedItem is not string file || _suppress)
+        if (_suppress || ProfileList.SelectedItem is not ProfileEntry row)
         {
             return;
         }
-        var cfg = ProfileStore.LoadProfile(file);
-        if (cfg != null)
+        if (row.Config is { } cfg)
         {
             Apply(cfg);
-            Log(Loc.Format("LogProfileLoaded", cfg.Name));
+            Log(Loc.Format("LogProfileLoaded", cfg.DisplayName));
         }
     }
 
     private void OnLoadProfile(object sender, RoutedEventArgs e)
     {
-        if (ProfileList.SelectedItem is string file)
+        if (SelectedProfileRow()?.Config is { } cfg)
         {
-            var cfg = ProfileStore.LoadProfile(file);
-            if (cfg != null)
-            {
-                Apply(cfg);
-            }
+            Apply(cfg);
         }
     }
 
     private void OnSaveProfile(object sender, RoutedEventArgs e)
     {
-        var name = Prompt("Save profile", "Profile name:",
-            string.IsNullOrWhiteSpace(TxtProfileName.Text) ? "My profile"
+        var name = Prompt(Loc.T("SecProfiles"), Loc.T("HintProfileName"),
+            string.IsNullOrWhiteSpace(TxtProfileName.Text) ? Loc.T("ProfileNew")
                                                            : TxtProfileName.Text);
         if (name == null)
         {
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            MessageBox.Show(this, Loc.T("ErrProfileName"), Loc.T("AskTitle"),
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var cfg = Collect();
@@ -868,7 +1176,7 @@ public partial class MainWindow : Window
         // lines so loading it back restores what the user saved (v3 §5.4)
         cfg.FilterProfiles = ProfileStore.HarvestFilterProfiles();
         ProfileStore.SaveProfile(cfg);
-        RefreshProfiles(name.Trim() + ".json");
+        RefreshProfiles(ProfileStore.SafeFileName(cfg.Name) + ".json");
         Log(Loc.Format("LogProfileSaved", cfg.Name));
         UpdateCommandPreview();
     }
@@ -881,23 +1189,8 @@ public partial class MainWindow : Window
         Log(Loc.T("LogNewProfile"));
     }
 
-    private void OnDeleteProfile(object sender, RoutedEventArgs e)
-    {
-        if (ProfileList.SelectedItem is not string file)
-        {
-            return;
-        }
-        if (MessageBox.Show(this, Loc.Format("ConfirmDeleteProfile", file),
-                            Loc.T("ConfirmTitle"),
-                            MessageBoxButton.YesNo, MessageBoxImage.Question) !=
-            MessageBoxResult.Yes)
-        {
-            return;
-        }
-        File.Delete(Path.Combine(ProfileStore.ProfilesDir, file));
-        RefreshProfiles();
-        Log(Loc.Format("LogDeleted", file));
-    }
+    private void OnDeleteProfile(object sender, RoutedEventArgs e) =>
+        DeleteProfileRow(SelectedProfileRow());
 
     private void OnApplyKeymap(object sender, RoutedEventArgs e)
     {

@@ -203,6 +203,75 @@ namespace GamingScrcpyLauncher
             new[] { "BtnImportJson", "Importar JSON", "Import JSON" },
             new[] { "HintProfileName", "Nombre del perfil", "Profile name" },
 
+            // ---- v4 \u00a72: the profile selector, the table and the footer text ----
+            new[] { "LblProfile", "Perfil:", "Profile:" },
+            new[] { "TipProfileHeader",
+                    "Elige el perfil con el que se lanzar\u00e1 la pr\u00f3xima sesi\u00f3n; nunca "
+                    + "reinicia la que est\u00e1 en curso.",
+                    "Picks the profile the next session launches with; it never restarts "
+                    + "the one already running." },
+            new[] { "HintProfilePending", "cambia al reiniciar", "changes on restart" },
+            new[] { "ProfEdit", "Editar", "Edit" },
+            new[] { "ProfDuplicate", "Duplicar", "Duplicate" },
+            new[] { "ProfDelete", "Eliminar", "Delete" },
+            new[] { "ProfColName", "Nombre", "Name" },
+            new[] { "ProfColFps", "fps", "fps" },
+            new[] { "ProfColRes", "resoluci\u00f3n", "resolution" },
+            new[] { "ProfColBitrate", "bitrate", "bitrate" },
+            new[] { "ProfColCodec", "codec", "codec" },
+            new[] { "ProfColLatency", "latencia esperada", "expected latency" },
+            new[] { "ProfColActions", "acciones", "actions" },
+            new[] { "ProfResNative", "nativa", "native" },
+            new[] { "TipProfLatency",
+                    "Estimaci\u00f3n del perfil: su b\u00fafer de v\u00eddeo m\u00e1s el suelo de "
+                    + "presentaci\u00f3n medido en este host (14-20 ms, BUILD_REPORT 5.1as). "
+                    + "La cifra real la da el OSD de la sesi\u00f3n.",
+                    "The profile's own estimate: its video buffer plus the presentation "
+                    + "floor measured on this host (14-20 ms, BUILD_REPORT 5.1as). The "
+                    + "session's OSD carries the real figure." },
+            new[] { "BtnProfileNew", "Nuevo perfil", "New profile" },
+            new[] { "BtnProfileRestore", "Restaurar perfiles por defecto",
+                    "Restore default profiles" },
+            new[] { "LblProfileRes", "Resoluci\u00f3n (m\u00e1x. del PC)", "Resolution (host maximum)" },
+            new[] { "TipProfileRes",
+                    "Nativa deja la imagen del tel\u00e9fono tal cual; el resto pone un "
+                    + "m\u00e1ximo en la ventana del PC. Ninguna cambia la resoluci\u00f3n, la "
+                    + "densidad ni el recorte del dispositivo.",
+                    "Native leaves the phone's picture alone; the other choices put a "
+                    + "maximum on the PC window. None of them changes the device's "
+                    + "resolution, density or cropping." },
+            new[] { "LblNotesEs", "Descripci\u00f3n (espa\u00f1ol)", "Description (Spanish)" },
+            new[] { "LblNotesEn", "Descripci\u00f3n (ingl\u00e9s)", "Description (English)" },
+            new[] { "TipProfileNotes",
+                    "Dos o tres l\u00edneas que dicen qu\u00e9 configura el perfil: fps, "
+                    + "resoluci\u00f3n, c\u00f3dec, bits, b\u00fafer y los requisitos que pide.",
+                    "Two or three lines saying what the profile configures: fps, "
+                    + "resolution, codec, bitrate, buffer and any requirement it asks for." },
+            new[] { "BtnProfileSave", "Guardar perfil", "Save profile" },
+            new[] { "BtnProfileFormClose", "Cerrar formulario", "Close form" },
+            new[] { "ProfileNoDesc",
+                    "Sin descripci\u00f3n: abre Perfiles y escribe qu\u00e9 configura este perfil.",
+                    "No description: open Perfiles and say what this profile configures." },
+            new[] { "ProfDupTitle", "Duplicar perfil", "Duplicate profile" },
+            new[] { "AskRestoreDefaults",
+                    "¿Restaurar los {0} perfiles por defecto? Los cambios que hiciste "
+                    + "en esos perfiles se pierden.",
+                    "Restore the {0} default profiles? The changes you made to them are "
+                    + "lost." },
+            new[] { "StatusProfileChecking", "comprobando el perfil contra scrcpy.exe\u2026",
+                    "checking the profile against scrcpy.exe\u2026" },
+            new[] { "LogProfileRestored", "perfiles por defecto restaurados: {0}",
+                    "default profiles restored: {0}" },
+            new[] { "LogProfileDuplicated", "perfil duplicado: {0}",
+                    "profile duplicated: {0}" },
+            new[] { "LogProfileEditing", "editando el perfil {0} (Gu\u00e1rdalo para escribirlo)",
+                    "editing profile {0} (Save it to write it back)" },
+            new[] { "ErrProfileInvalid",
+                    "El binario real rechaza este perfil, no se ha guardado: {0}",
+                    "The real binary rejects this profile, nothing was saved: {0}" },
+            new[] { "ErrPickProfile", "Selecciona primero un perfil",
+                    "Pick a profile first" },
+
             new[] { "SecKeymap", "TECLADO / MANDO", "KEYMAP / CONTROLLER" },
             new[] { "BtnApplyKeymap", "Aplicar mapa", "Apply keymap" },
             new[] { "BtnOpenKeymapDir", "Abrir carpeta", "Open folder" },

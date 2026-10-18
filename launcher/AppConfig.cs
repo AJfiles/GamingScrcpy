@@ -8,8 +8,76 @@ namespace GamingScrcpyLauncher;
 /// %APPDATA%\GamingScrcpy\profiles.
 public sealed class AppConfig
 {
+    // ---- identity and display strings ----
+    // "name" is the identity: it keys the file under
+    // %APPDATA%\GamingScrcpy\profiles and becomes the mirror window title, so
+    // it never changes when the UI is translated. The two Es fields are what the
+    // user reads; a profile written before they existed falls back to "name"
+    // and "notes", which is why every builtin carries both languages.
     [JsonPropertyName("name")] public string Name { get; set; } = "Default";
+    [JsonPropertyName("nameEs")] public string NameEs { get; set; } = "";
     [JsonPropertyName("notes")] public string Notes { get; set; } = "";
+    [JsonPropertyName("notesEs")] public string NotesEs { get; set; } = "";
+
+    public static bool Spanish =>
+        string.Equals(Loc.Instance.Language, "es", StringComparison.OrdinalIgnoreCase);
+
+    public string DisplayName =>
+        Spanish && !string.IsNullOrWhiteSpace(NameEs) ? NameEs : Name;
+
+    public string DisplayNotes =>
+        Spanish && !string.IsNullOrWhiteSpace(NotesEs) ? NotesEs : Notes;
+
+    // The two readouts the profile table shows, in the same tokens the command
+    // line uses.
+    public string CodecLabel => MapCodec(VideoCodec);
+
+    // The cap this profile puts on the picture, as the table's resolution cell
+    // shows it: the host window size, or the frame bridge's size when no window
+    // cap is set. Empty means nothing is capped and the device's own picture is
+    // presented. Nothing here is ever a change to the device.
+    public string HostCapLabel =>
+        CapOf(HostPreset) ?? CapOf(HostWidth, HostHeight) ?? BridgeCapLabel ?? "";
+
+    private string? BridgeCapLabel
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(FrameBridge)
+                || NormalizeBridgeScale(BridgeScale) is not { } scale)
+            {
+                return null;
+            }
+            var parts = scale.Split('x');
+            return CapOf(int.Parse(parts[0]), int.Parse(parts[1]));
+        }
+    }
+
+    private static string? CapOf(string preset) =>
+        Presets.TryGetValue(preset, out var p) && p.w > 0 ? CapOf(p.w, p.h) : null;
+
+    private static string? CapOf(int w, int h) => (w, h) switch
+    {
+        (3840, 2160) => "4K",
+        (2560, 1440) => "1440p",
+        (1920, 1080) => "1080p",
+        (1280, 720) => "720p",
+        (0, 0) => null,
+        ( > 0, > 0) => $"{w}x{h}",
+        _ => null,
+    };
+
+    // The profile table's latency column. It is the profile's own video buffer
+    // plus the host floor this fork was measured at (14-20 ms presented on the
+    // S23 Ultra, BUILD_REPORT 5.1as), so it reads as the estimate it is: the
+    // number to compare against the OSD's measured one, not a measurement.
+    public int ExpectedLatencyMs => VideoBufferMs + EncoderPreset switch
+    {
+        "ultrafast" => 15,
+        "fast" => 20,
+        "medium" => 30,
+        _ => 40,
+    };
 
     // ---- device / transport ----
     [JsonPropertyName("serial")] public string Serial { get; set; } = "";
@@ -53,8 +121,11 @@ public sealed class AppConfig
     [JsonPropertyName("osd")] public string Osd { get; set; } = "compact";
     [JsonPropertyName("cursorAutohideMs")] public int CursorAutohideMs { get; set; }
     [JsonPropertyName("hostPreset")] public string HostPreset { get; set; } = "fit";
-    [JsonPropertyName("hostWidth")] public int HostWidth;
-    [JsonPropertyName("hostHeight")] public int HostHeight;
+    // properties, not fields: System.Text.Json only writes properties, so an
+    // explicit host window size used to vanish on the way to the profile file and
+    // come back as "no cap" (measured: a saved 1280x720 preset reloaded as 0x0)
+    [JsonPropertyName("hostWidth")] public int HostWidth { get; set; }
+    [JsonPropertyName("hostHeight")] public int HostHeight { get; set; }
 
     // ---- post-processing (opt-in: it costs host CPU on the frame path) ----
     [JsonPropertyName("fxSharp")] public bool FxSharp { get; set; }
@@ -189,6 +260,12 @@ public sealed class AppConfig
         }
         return $"{w}x{h}";
     }
+
+    // The codec as the picker lists it. Profiles and command line spell H.265
+    // "h265" while the UI item says "hevc": reading the stored value straight
+    // into the combo fell back to h264, which would have rewritten the codec of
+    // every h265 preset on the next save.
+    public string CodecChoice => MapCodec(VideoCodec) == "h265" ? "hevc" : MapCodec(VideoCodec);
 
     private static string MapCodec(string codec) => codec switch    {
         "hevc" or "h265" or "HEVC" => "h265",
@@ -464,7 +541,10 @@ public sealed class AppConfig
         }
 
         a.Add("--window-title");
-        a.Add(string.IsNullOrWhiteSpace(Name) ? "Gaming Scrcpy" : Name);
+        // the title is the name the user picked, in the language they read: OBS
+        // targets the mirror by this string, so it has to be the one the profile
+        // selector shows. The stored identity (Name) is unchanged.
+        a.Add(string.IsNullOrWhiteSpace(DisplayName) ? "Gaming Scrcpy" : DisplayName);
 
         foreach (var extra in SplitExtraArgs(ExtraArgs))
         {

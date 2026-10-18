@@ -836,6 +836,38 @@ FFmpeg-based consumers.
 * **Live command preview** + "Copy command line" + "OBS: copy ffplay command",
   and a run log that captures scrcpy's own output (including the FPS/bitrate
   lines it logs) and reports the recording path and size on exit.
+* **Profile selector in the header** (`CboProfile`), next to the device list.
+  Picking a profile applies to the *next* launch; while a session is running the
+  panel says so instead of pretending to restart it. Right-click gives Editar /
+  Duplicar / Eliminar, and the footer box restates in two or three lines what the
+  selected profile configures, in the current language.
+* **Profile editor in *Avanzado***: the table lists name, fps, resolution,
+  bitrate, codec and expected latency for every stored profile, *Nuevo perfil*
+  opens the full form, *Restaurar por defecto* rewrites the shipped set, and
+  Import/Export move profiles as JSON. Saving runs the same self-test as
+  `GamingScrcpyLauncher.exe --validate-profiles`, so a profile the real
+  `scrcpy.exe` would reject cannot be saved.
+* **20 shipped profiles**, each with a Spanish and an English description. Their
+  names are labels: "4K" and "1440p" are `--max-size` limits applied by the
+  client to its own output, never a request to change the phone's panel
+  resolution.
+
+### A profile that stops at once
+
+Some profiles ask for a codec the phone cannot encode. *4K ultra calidad
+60fps* (`--video-codec=av1`) is the case in point on a moto g(7) power
+(Android 9): the device's `MediaCodec` refuses, the server drops the link and
+the client exits, printing
+
+```
+WARN: Device disconnected
+ERROR: Demuxer 'video': stream disabled due to connection error
+```
+
+That is the phone, not the mirror: no grey window and no "No responde", the
+session simply ends. Use a `h264` profile on older devices; AV1 encode needs a
+recent flagship (the S23 Ultra handles it, see §7). A pre-flight badge that tells
+you this *before* the launch is not implemented yet, and is listed in §11.
 
 ## 10. Rebuilding from source
 
@@ -890,6 +922,10 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   content rectangle; the device-side `--show-touches` (system setting) is a
   different, device-rendered feature and is not enabled by this fork.
 * No DirectShow virtual camera (§8).
+* The launcher warns about an unsupported **audio** codec before the launch, but
+  not about an unsupported **video** codec: it has no device-side encoder list,
+  so a profile asking for AV1 on a phone that cannot encode it ends the session
+  with the client's own error instead of being refused in the panel (§9).
 
 ## 12. Troubleshooting: pantalla gris / "No responde"
 

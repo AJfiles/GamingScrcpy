@@ -3015,6 +3015,113 @@ failure: §6.1's criterion for this item is bytes on the wire, and the audibilit
 step stays manual for the reason given in §5.1at.
 
 
+### 5.1av. v4 §3 + §2 — the profile list is Spanish, 20 strong, and reachable in the UI
+
+Directive §3 asked for three things that could each be faked, so each got a
+number rather than a sentence.
+
+```
+$ dist/GamingScrcpy/launcher/GamingScrcpyLauncher.exe --validate-profiles | grep BUILTINS
+BUILTINS n=20 desc_es_missing=0 desc_en_missing=0 name_es_missing=0
+SPANISH n=20 display_equals_identity=0 window_title_not_display_name=0 example=Latencia m\u00ednima
+ROUNDTRIP n=20 parameters_lost=0
+ALL PROFILES VALID
+$ bash tools/profiles_check.sh
+8 passed, 0 failed
+PROFILES CHECK OK builtin=20 valid=20 desc_es=20 desc_en=20
+```
+
+What is actually claimed, and by what:
+
+* **20 builtins** (10 pre-existing + the 10 of §3.2: `Lowest latency USB 60`,
+  `Lowest latency 120`, `Maximum fluidity 120`, `Maximum fluidity 90`,
+  `Quality 60`, `Competitive 720p 120`, `Balanced 1080p 60`,
+  `4K maximum quality`, `4K 30fps recording`, `1440p 60`). §3.3 needs ≥ 19, so
+  the count is met with one to spare.
+* **Every one is accepted by the real `scrcpy.exe`**, through the launcher's own
+  `BuildArguments()` handed to `scrcpy --version` (parse then exit, no device
+  touched). The check counts the `PASS builtin` lines and requires
+  `checked == n`, so a profile that never ran cannot hide behind a green exit.
+* **Spanish is a label, not a rename.** `Name` stays the identity that keys the
+  JSON file (`Lowest latency`), `NameEs` is what a Spanish user reads and what
+  titles the mirror window (`Latencia mínima`). `display_equals_identity=0` and
+  `window_title_not_display_name=0` are the two halves of that, and
+  `parameters_lost=0` says the serializer did not quietly drop a field the label
+  promises. A user's saved profile therefore still loads after this change.
+* **§13 holds**: `4K`/`1440p` in a name means `--max-size`, i.e. the client's own
+  scaling cap. Nothing in a profile writes a device resolution, and gate §13 is
+  the check that keeps it that way.
+
+For §2 the interesting part is not the XAML but the proof. A WPF element with
+`Visibility="Collapsed"` is **absent from the UI Automation tree**, so a profile
+form that exists but is never opened is indistinguishable from no form at all.
+`tools/launcher_uiauto.ps1` therefore selects the Advanced tab, *invokes*
+`BtnProfileNew`, and only then looks for the fields:
+
+```
+PASS ProfileList (TabAdvanced)      PASS BtnProfileNew (TabAdvanced)
+PASS BtnProfileRestore (TabAdvanced)
+PASS TxtProfileName (profile form open)
+PASS CboFormFps (profile form open)
+PASS LblFormLatency (profile form open)
+PASS CboProfile (header)
+UIAUTO OK
+```
+
+`tools/profiles_check.sh` is wired into gate section 9 (`verify_all.sh` relays
+its verdict line instead of re-implementing the rules, so the checks cannot be
+edited into silence).
+
+### 5.1aw. v4 §6.1 — all 20 profiles against a real phone, and hypothesis 5 in its own words
+
+`tools/profile_sweep_device.sh` mirrors each builtin profile as a real session
+and judges three things: telemetry lines (a frame reached the screen), the
+client's own `ERROR` lines, and whether a `WM_CLOSE` ends the process within
+10 s -- the last one is the "No responde" test, because a hung window does not
+answer a close request. The command lines come from the launcher itself
+(`--dump-profile-args`, one `ARG` line per token so a two-word `--window-title`
+survives); nothing is transcribed into the harness.
+
+Run on the moto g(7) power (`<dev-id-2>`, Android 9 / SDK 28) after the S23 Ultra
+was unplugged, 10 s per profile, panel dark and locked so `scene=static`:
+
+```
+RESULT profiles=20 fails=0 skips=1 scene=static
+```
+
+19 of 20 painted frames and every one of the 20 closed on request -- no profile
+produced a hung window. The `skips=1` is not a coverage gap to smooth over, it
+is the finding:
+
+```
+PROFILE 4K Ultra Quality Stream 60FPS   telemetry=0 errors=2 closed=yes
+WARN: Device disconnected
+ERROR: Demuxer 'video': stream disabled due to connection error
+ERROR: Demuxer 'audio': stream disabled due to connection error
+```
+
+That profile asks for `--video-codec=av1`. The g7 power's Snapdragon 660 has no
+AV1 encoder, so the device's `MediaCodec` refuses and the server drops the
+connection -- exactly directive §1.1 hypothesis 5 ("el perfil pide un códec que
+el dispositivo rechaza"). Two things follow, and both are worth keeping in mind
+when the S23 comes back:
+
+1. **The failure is graceful, which is the part §1.3 demanded.** The client
+   prints why, closes both demuxers, and exits; the window answers `WM_CLOSE`.
+   There is no grey hang behind an unsupported codec.
+2. **The launcher does not warn before the attempt.** The audio codec has a
+   support badge; the video codec does not, so a Spanish user picking
+   "4K ultra calidad stream 60fps" on an Android 9 phone sees a window that
+   closes rather than "este teléfono no puede codificar AV1". Adding a video
+   capability badge is the honest fix and it is **not done here**: reading the
+   device's encoder list needs a `dumpsys media.codec` query per device, which is
+   a new surface of its own. Recorded as open work instead of claimed as done.
+
+The same sweep on the S23 Ultra is what §6.1 wants for the three AV1/120 Hz
+profiles; until it runs again the numbers stay `SKIP`ed with the reason, and the
+latency baselines of §5.1n stay as measured on the phone that produced them.
+
+
 ## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so

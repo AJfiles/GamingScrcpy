@@ -54,13 +54,13 @@
                      long as it lived in the star cell it could be squeezed to
                      a few pixels and read as an overlap. Window MinWidth below
                      is what keeps the two Auto columns inside the window. -->
-                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
-                            VerticalAlignment="Center" Margin="0,0,0,4">
+                <WrapPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
+                           VerticalAlignment="Center" Margin="0,0,0,4" MaxWidth="560">
                     <Ellipse x:Name="DevDot" Width="10" Height="10" Fill="{StaticResource Warn}"
                              VerticalAlignment="Center"/>
                     <TextBlock Text="{DynamicResource LblDevice}" Style="{StaticResource Hint}"
                                VerticalAlignment="Center" Margin="8,0,8,0"/>
-                    <ComboBox x:Name="DeviceCombo" MinWidth="168" MaxWidth="300"
+                    <ComboBox x:Name="DeviceCombo" MinWidth="150" MaxWidth="260"
                               VerticalAlignment="Center">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
@@ -72,7 +72,50 @@
                                Style="{StaticResource Num}" FontFamily="Segoe UI"
                                Foreground="{StaticResource Warn}" VerticalAlignment="Center"
                                Margin="12,0,0,0"/>
-                </StackPanel>
+
+                    <!-- v4 §2.1: the quick profile selector sits beside the device it
+                         launches on. It only decides the next session, so a running
+                         mirror is never restarted by picking another row, and the
+                         amber note says so while that is the case. Right-click gives
+                         the edit / duplicate / delete actions of the Perfiles panel.
+                         The icon is a drawn Path: the theme keeps pictographs out of
+                         the strings (tools/theme_audit.sh). -->
+                    <TextBlock Text="{DynamicResource LblProfile}" Style="{StaticResource Hint}"
+                               VerticalAlignment="Center" Margin="16,0,6,0"/>
+                    <ComboBox x:Name="CboProfile" MinWidth="140" MaxWidth="220"
+                              VerticalAlignment="Center"
+                              SelectionChanged="OnHeaderProfileChanged"
+                              ToolTip="{DynamicResource TipProfileHeader}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Width="11" Height="9" Stretch="Fill"
+                                          VerticalAlignment="Center" Margin="0,0,6,0"
+                                          Fill="{StaticResource Accent}"
+                                          Data="M 0,0 L 7,0 L 7,3 L 11,3 L 11,6 L 7,6 L 7,9 L 0,9 Z"/>
+                                    <TextBlock Text="{Binding Display}" MaxWidth="170"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                        <ComboBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="MiProfileEdit" Header="{DynamicResource ProfEdit}"
+                                          Click="OnProfileMenuEdit"/>
+                                <MenuItem x:Name="MiProfileDuplicate"
+                                          Header="{DynamicResource ProfDuplicate}"
+                                          Click="OnProfileMenuDuplicate"/>
+                                <MenuItem x:Name="MiProfileDelete"
+                                          Header="{DynamicResource ProfDelete}"
+                                          Click="OnProfileMenuDelete"/>
+                            </ContextMenu>
+                        </ComboBox.ContextMenu>
+                    </ComboBox>
+                    <TextBlock x:Name="TxtProfilePending" Visibility="Collapsed"
+                               Text="{DynamicResource HintProfilePending}"
+                               Foreground="{StaticResource Warn}" Style="{StaticResource Hint}"
+                               VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="130"/>
+                </WrapPanel>
 
                 <WrapPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal"
                            HorizontalAlignment="Right" MaxWidth="580" Margin="0,0,0,4">
@@ -116,7 +159,8 @@
                 <ColumnDefinition Width="340"/>
             </Grid.ColumnDefinitions>
 
-            <TabControl Grid.Column="0" Background="Transparent" BorderBrush="{StaticResource Line}">
+            <TabControl x:Name="MainTabs" Grid.Column="0" Background="Transparent"
+                        BorderBrush="{StaticResource Line}">
                 <TabItem Header="{DynamicResource TabQuick}">
                     <Grid Margin="8">
                         <Grid.RowDefinitions>
@@ -694,13 +738,92 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="{DynamicResource TabAdvanced}">
+                <TabItem x:Name="TabAdvancedItem" Header="{DynamicResource TabAdvanced}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8">
                             <TextBlock Text="{DynamicResource HintAdvanced}" Style="{StaticResource Hint}"/>
                             <TextBlock Text="{DynamicResource SecProfiles}" Style="{StaticResource SectionHeader}"/>
-                            <ListBox x:Name="ProfileList" Height="150"
-                                     SelectionChanged="OnProfileSelected"/>
+
+                            <!-- v4 §2.2: the profile table. The header row and the row
+                                 template repeat the same seven widths on purpose: two
+                                 grids that cannot be given a shared definition here,
+                                 and a mismatch shows up as a crooked column instead of
+                                 a silent mis-alignment of a real one. -->
+                            <Grid Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="48"/>
+                                    <ColumnDefinition Width="88"/>
+                                    <ColumnDefinition Width="84"/>
+                                    <ColumnDefinition Width="58"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="200"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource ProfColName}"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ProfColFps}"
+                                           Style="{StaticResource FieldLabel}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="2" Text="{DynamicResource ProfColRes}"
+                                           Style="{StaticResource FieldLabel}" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{DynamicResource TipProfileRes}"/>
+                                <TextBlock Grid.Column="3" Text="{DynamicResource ProfColBitrate}"
+                                           Style="{StaticResource FieldLabel}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="4" Text="{DynamicResource ProfColCodec}"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Column="5" Text="{DynamicResource ProfColLatency}"
+                                           Style="{StaticResource FieldLabel}" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{DynamicResource TipProfLatency}"/>
+                                <TextBlock Grid.Column="6" Text="{DynamicResource ProfColActions}"
+                                           Style="{StaticResource FieldLabel}"/>
+                            </Grid>
+                            <ListBox x:Name="ProfileList" Height="230"
+                                     SelectionChanged="OnProfileSelected"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="48"/>
+                                                <ColumnDefinition Width="88"/>
+                                                <ColumnDefinition Width="84"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="200"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Display}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Fps}"
+                                                       Style="{StaticResource Num}" FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Resolution}"
+                                                       Style="{StaticResource Num}" FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding Bitrate}"
+                                                       Style="{StaticResource Num}" FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding Codec}"
+                                                       Style="{StaticResource Num}" FontFamily="Segoe UI"/>
+                                            <TextBlock Grid.Column="5" Text="{Binding Latency}"
+                                                       Style="{StaticResource Num}" FontFamily="Segoe UI"
+                                                       ToolTip="{DynamicResource TipProfLatency}"/>
+                                            <StackPanel Grid.Column="6" Orientation="Horizontal"
+                                                        VerticalAlignment="Center">
+                                                <!-- Tag is the machine token the handler
+                                                     switches on: the button's own text is
+                                                     localized and cannot identify an action. -->
+                                                <Button Content="{DynamicResource ProfEdit}"
+                                                        Style="{StaticResource Chip}" Tag="edit"
+                                                        Click="OnProfileRowAction"/>
+                                                <Button Content="{DynamicResource ProfDuplicate}"
+                                                        Style="{StaticResource Chip}" Tag="duplicate"
+                                                        Click="OnProfileRowAction"/>
+                                                <Button Content="{DynamicResource BtnDelete}"
+                                                        Style="{StaticResource Chip}" Tag="delete"
+                                                        Click="OnProfileRowAction"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                             <Grid Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
@@ -720,8 +843,116 @@
                                 <Button Grid.Column="5" Content="{DynamicResource BtnImportJson}"
                                         Margin="4,0,0,0" Click="OnImportProfiles"/>
                             </Grid>
-                            <TextBox x:Name="TxtProfileName" Margin="0,8,0,0"
-                                     ToolTip="{DynamicResource HintProfileName}"/>
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button x:Name="BtnProfileNew" Content="{DynamicResource BtnProfileNew}"
+                                        Click="OnNewProfileForm" ToolTip="{DynamicResource TipProfileNotes}"/>
+                                <Button x:Name="BtnProfileRestore" Margin="8,0,0,0"
+                                        Content="{DynamicResource BtnProfileRestore}"
+                                        Click="OnRestoreProfiles"/>
+                            </WrapPanel>
+
+                            <!-- the form the two buttons above open: the identity and the
+                                 parameters a profile is judged by. Everything else the
+                                 profile carries stays editable in its own tab, and Apply
+                                 keeps the two views of the same AppConfig in step. -->
+                            <Border x:Name="ProfileForm" Visibility="Collapsed" Margin="0,8,0,0"
+                                    Padding="10" CornerRadius="6" Background="{StaticResource Panel2}"
+                                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="160"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="120"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/><RowDefinition/><RowDefinition/>
+                                        <RowDefinition/><RowDefinition/><RowDefinition/>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{DynamicResource SecProfiles}"
+                                               Grid.ColumnSpan="3" Style="{StaticResource SectionHeader}"
+                                               Margin="0,0,0,8"/>
+                                    <TextBlock Grid.Row="1" Text="{DynamicResource HintProfileName}"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="TxtProfileName" Grid.Row="1" Grid.Column="1"
+                                             Grid.ColumnSpan="2" ToolTip="{DynamicResource HintProfileName}"/>
+                                    <TextBlock Grid.Row="2" Text="{DynamicResource LblMaxFps}"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox x:Name="CboFormFps" Grid.Row="2" Grid.Column="1"
+                                              HorizontalAlignment="Left" MinWidth="90" Margin="0,4"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="2" x:Name="LblFormLatency"
+                                               Style="{StaticResource Num}" FontFamily="Segoe UI"
+                                               Foreground="{StaticResource FgDim}"
+                                               ToolTip="{DynamicResource TipProfLatency}"/>
+                                    <TextBlock Grid.Row="3" Text="{DynamicResource LblProfileRes}"
+                                               Style="{StaticResource FieldLabel}"
+                                               ToolTip="{DynamicResource TipProfileRes}"/>
+                                    <ComboBox x:Name="CboFormRes" Grid.Row="3" Grid.Column="1"
+                                              HorizontalAlignment="Left" MinWidth="140" Margin="0,4"
+                                              ToolTip="{DynamicResource TipProfileRes}">
+                                        <ComboBoxItem Content="{DynamicResource ProfResNative}"/>
+                                        <ComboBoxItem Content="720p"/>
+                                        <ComboBoxItem Content="1080p"/>
+                                        <ComboBoxItem Content="1440p"/>
+                                        <ComboBoxItem Content="4K"/>
+                                    </ComboBox>
+                                    <TextBlock Grid.Row="4" Text="{DynamicResource LblBitrate}"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox x:Name="CboFormBitrate" Grid.Row="4" Grid.Column="1"
+                                              HorizontalAlignment="Left" MinWidth="90" Margin="0,4"/>
+                                    <TextBlock Grid.Row="5" Text="{DynamicResource LblVideoCodec}"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox x:Name="CboFormCodec" Grid.Row="5" Grid.Column="1"
+                                              HorizontalAlignment="Left" MinWidth="120" Margin="0,4">
+                                        <ComboBoxItem Content="h264"/>
+                                        <ComboBoxItem Content="{DynamicResource ItemHevc}"/>
+                                        <ComboBoxItem Content="av1"/>
+                                    </ComboBox>
+                                    <TextBlock Grid.Row="6" Text="{DynamicResource LblVideoBuffer}"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox x:Name="CboFormBuffer" Grid.Row="6" Grid.Column="1"
+                                              HorizontalAlignment="Left" MinWidth="90" Margin="0,4"/>
+                                    <TextBlock Grid.Row="7" Text="{DynamicResource LblEncoder}"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox x:Name="CboFormPreset" Grid.Row="7" Grid.Column="1"
+                                              HorizontalAlignment="Left" MinWidth="150" Margin="0,4"
+                                              ToolTip="{DynamicResource TipEncoderPreset}">
+                                        <ComboBoxItem Content="{DynamicResource ItemEncoderDefault}"/>
+                                        <ComboBoxItem Content="{DynamicResource ItemEncoderUltrafast}"/>
+                                        <ComboBoxItem Content="{DynamicResource ItemEncoderFast}"/>
+                                        <ComboBoxItem Content="{DynamicResource ItemEncoderMedium}"/>
+                                    </ComboBox>
+                                    <CheckBox x:Name="ChkFormLowLatency" Grid.Row="8" Grid.Column="1"
+                                              Content="{DynamicResource ChkLowLatency}"/>
+                                    <StackPanel Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="3"
+                                                Margin="0,8,0,0">
+                                        <TextBlock Text="{DynamicResource LblNotesEs}"
+                                                   Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtFormNotesEs" Height="46" Margin="0,2,0,6"
+                                                 TextWrapping="Wrap" AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 VerticalContentAlignment="Top"
+                                                 ToolTip="{DynamicResource TipProfileNotes}"/>
+                                        <TextBlock Text="{DynamicResource LblNotesEn}"
+                                                   Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtFormNotesEn" Height="46" Margin="0,2,0,6"
+                                                 TextWrapping="Wrap" AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 VerticalContentAlignment="Top"
+                                                 ToolTip="{DynamicResource TipProfileNotes}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <Button x:Name="BtnProfileSave"
+                                                    Content="{DynamicResource BtnProfileSave}"
+                                                    Style="{StaticResource Primary}"
+                                                    Click="OnSaveProfileForm"/>
+                                            <Button x:Name="BtnProfileFormCancel" Margin="8,0,0,0"
+                                                    Content="{DynamicResource BtnProfileFormClose}"
+                                                    Click="OnCloseProfileForm"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
@@ -754,6 +985,10 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <TextBlock x:Name="TxtStatus" Text="{DynamicResource StatusIdle}"
                            Foreground="{StaticResource FgDim}" VerticalAlignment="Center"
                            Margin="0,0,16,0" TextTrimming="CharacterEllipsis"/>
@@ -774,6 +1009,14 @@
                                Foreground="{StaticResource Fg}" Text="{DynamicResource ValNotFound}"
                                MinWidth="0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
+                <!-- v4 §2.3: what the profile on the screen actually configures, in
+                     two or three quiet lines, written by whichever selector moved,
+                     the header combo or the Perfiles table, and re-written when the
+                     language changes. -->
+                <TextBlock x:Name="TxtProfileInfo" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                           Style="{StaticResource Hint}" Foreground="{StaticResource FgDim}"
+                           Margin="0,8,0,0" TextWrapping="Wrap" MaxHeight="54"
+                           Text="{DynamicResource ProfileNoDesc}"/>
             </Grid>
         </Border>
     </Grid>

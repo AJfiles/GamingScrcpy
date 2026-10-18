@@ -124,7 +124,15 @@ $w.Write([UInt16]1)          # type: icon
 $w.Write([UInt16]$entries.Count)
 $offset = 6 + 16 * $entries.Count
 foreach ($e in $entries) {
-    $dim = if ($e.Size -ge 256) { 0 } else { [Byte]$e.Size }
+    # the cast has to be on its own statement: `if` is not an expression in
+    # Windows PowerShell, and leaving it to the ternary-free `else` branch meant
+    # $dim arrived as an Int32 for the 256 px entry -- BinaryWriter then emitted
+    # 4 bytes for the width and 4 for the height, the directory grew past 16
+    # bytes per record and csc refused the build with CS7065 "unable to read
+    # beyond the end of the stream". That is how a broken app.ico got committed.
+    $dim = 0
+    if ($e.Size -lt 256) { $dim = $e.Size }
+    $dim = [Byte]$dim
     $w.Write($dim)           # width
     $w.Write($dim)           # height
     $w.Write([Byte]0)        # palette
@@ -140,6 +148,35 @@ $w.Flush()
 $ico = Join-Path $dir 'app.ico'
 [System.IO.File]::WriteAllBytes($ico, $ms.ToArray())
 $w.Dispose(); $ms.Dispose()
+
+# Read the container back and check it against itself before calling it done:
+# every record must sit in its own 16-byte slot and every payload must land
+# inside the file. A writer that produces something only Explorer can judge is
+# how the last version of this script shipped an exe that would not compile.
+$bytes = [System.IO.File]::ReadAllBytes($ico)
+$fail = 0
+if ($bytes.Length -lt 6 + 16 * $entries.Count) { $fail++ }
+$n = [System.BitConverter]::ToUInt16($bytes, 4)
+if ($n -ne $entries.Count) { $fail++ }
+for ($i = 0; $i -lt $n; $i++) {
+    $o = 6 + 16 * $i
+    $sz = [System.BitConverter]::ToUInt32($bytes, $o + 8)
+    $ofs = [System.BitConverter]::ToUInt32($bytes, $o + 12)
+    $w8 = [System.BitConverter]::ToUInt16($bytes, $o + 4)   # planes
+    $d8 = [System.BitConverter]::ToUInt16($bytes, $o + 6)   # bit depth
+    $dimRead = $bytes[$o]
+    if ($w8 -ne 1 -or $d8 -ne 32) { $fail++ }
+    if ($sz -eq 0 -or ($ofs + $sz) -gt $bytes.Length) { $fail++ }
+    # the PNG signature is the only thing that proves the payload landed where
+    # the directory says it did
+    $sig = '{0:X2}{1:X2}{2:X2}{3:X2}' -f $bytes[$ofs], $bytes[$ofs + 1], `
+        $bytes[$ofs + 2], $bytes[$ofs + 3]
+    if ($sig -ne '89504E47') { $fail++ }
+    $px = if ($dimRead -eq 0) { 256 } else { $dimRead }
+    Write-Output ("  entry {0}: {1}px planes={2} depth={3} size={4} offset={5} png={6}" -f `
+        $i, $px, $w8, $d8, $sz, $ofs, $sig)
+}
+if ($fail) { throw "app.ico does not parse back cleanly ($fail problem(s))" }
 
 $fi = Get-Item $ico
 Write-Output ("app.ico {0} bytes, {1} images: {2}" -f $fi.Length, $entries.Count,

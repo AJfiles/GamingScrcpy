@@ -399,6 +399,19 @@ if [ -x "$LAUNCHER" ] || [ -f "$LAUNCHER" ]; then
     printf '%s' "$lv" | grep -q -- '--game-filter-profiles=' && ok "profile file handed to the panel by the launcher" || bad "launcher does not emit --game-filter-profiles"
     printf '%s' "$lv" | grep -q -- '--game-overlay-hotkey=ctrl+shift+f9' && ok "custom hotkey emitted by the launcher" || bad "launcher does not emit --game-overlay-hotkey"
     printf '%s' "$lv" | grep -q 'PASS invalid overlay hotkey dropped' && ok "an invalid hotkey is dropped, not sent" || bad "invalid hotkey reaches the command line"
+
+    # directive v4 §3.3: at least 19 builtins, every one accepted by the real
+    # binary, each with a non-empty description in BOTH languages, a Spanish
+    # display name that is not the stored identity, and a JSON round trip that
+    # loses no parameter. tools/profiles_check.sh owns that verdict; this gate
+    # only relays it, so the rules cannot be edited into silence here.
+    pc=$(bash "$ROOT/tools/profiles_check.sh" 2>&1)
+    if printf '%s' "$pc" | grep -q '^PROFILES CHECK OK'; then
+        ok "$(printf '%s' "$pc" | grep '^PROFILES CHECK OK' | sed 's/^PROFILES CHECK OK //')"
+    else
+        bad "v4 §3.3 profile set check failed"
+        printf '%s\n' "$pc" | grep -E '^(FAIL|note)' | head -8 | sed 's/^/    /'
+    fi
 else
     bad "launcher not found"
 fi

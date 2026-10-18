@@ -99,13 +99,16 @@ try {
                                         'TxtExtraArgs') }
         @{ key='TabControl';      ids=@('CboKeyboard','CboMouse','CboGamepad',
                                         'TxtMouseBindings','KeymapList','TxtKeymapHint') }
-        @{ key='TabAdvanced';     ids=@('ProfileList','TxtProfileName') }
+        @{ key='TabAdvanced';     ids=@('ProfileList',
+                                        'BtnProfileNew','BtnProfileRestore') }
     )
 
     # header buttons live outside the TabControl, so they are always in the tree
-    # (TxtAudioBadge is not listed: it only exists once a phone has been read)
+    # (TxtAudioBadge is not listed: it only exists once a phone has been read, and
+    # neither TxtProfilePending nor the profile form is listed: a Collapsed element
+    # is absent from the automation tree, which is what WPF gives UI Automation)
     foreach ($id in @('BtnRefresh','BtnWireless','BtnPair','BtnConnect','CboLanguage',
-                      'BtnAudioDiag', 'BtnShortcuts')) {
+                      'BtnAudioDiag', 'BtnShortcuts', 'CboProfile')) {
         if (ById $window $id) { Write-Output "PASS $id (header)" }
         else { Write-Output "FAIL $id missing from the header"; $fail++ }
     }
@@ -131,6 +134,26 @@ try {
         foreach ($id in $entry.ids) {
             if (ById $window $id) { Write-Output "PASS $id ($($entry.key))" }
             else { Write-Output "FAIL $id missing under $($entry.key)"; $fail++ }
+        }
+    }
+
+    # v4 §2.2: the profile form is Collapsed until "Nuevo perfil" is pressed, so
+    # it is invisible to UI Automation until the button is invoked. Pressing it is
+    # the only way to prove the editor is real and reachable, not a stub.
+    $newBtn = ById $window 'BtnProfileNew'
+    if (-not $newBtn) {
+        Write-Output 'FAIL BtnProfileNew unreachable, the profile form cannot be probed'
+        $fail++
+    } else {
+        try {
+            ($newBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+        } catch {
+            Write-Output "FAIL BtnProfileNew did not respond: $($_.Exception.Message)"; $fail++
+        }
+        Start-Sleep -Milliseconds 600
+        foreach ($id in @('TxtProfileName', 'CboFormFps', 'LblFormLatency')) {
+            if (ById $window $id) { Write-Output "PASS $id (profile form open)" }
+            else { Write-Output "FAIL $id missing after opening the form"; $fail++ }
         }
     }
 

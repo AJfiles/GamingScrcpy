@@ -90,6 +90,10 @@ namespace GamingScrcpyLauncher
             }
             // anything the code-behind sets imperatively has to be re-applied
             RefreshLabels();
+            // the profile cells and the footer line are built as localized text,
+            // so a language switch rebuilds them rather than re-showing old strings
+            RefreshProfiles(adopt: false);
+            UpdateProfilePendingHint();
             UpdateCommandPreview();
             TxtStatus.Text = Loc.Format("StatusLangChanged", Loc.LanguageName(code));
         }
