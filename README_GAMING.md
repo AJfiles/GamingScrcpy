@@ -437,10 +437,13 @@ That sweep counted frames, and frames are not latency. Against a real device,
 of 699 ms versus 69 ms through `direct3d11` with the same stream (BUILD_REPORT
 §5.1n). So: keep `direct3d11` unless you have a reason not to, and if you do
 change it, compare the two medians on your own machine before deciding — the
-numbers move with the GPU driver, not with the docs. The same runs showed AV1
-mirroring cost 16 fps here, because this GPU has no hardware AV1 *decoder*
-(`--video-codec=av1` then falls back to the CPU): use AV1 for recording, where
-nothing is decoded, and h264 or h265 for the live mirror.
+numbers move with the GPU driver, not with the docs. The same runs measured AV1 in
+the live mirror on a Galaxy S23 Ultra: `--video-codec=av1` prints
+`hardware decoding failed … falling back to software decoding`, keeps presenting
+frames (so it is not the grey-screen bug), but costs `fps=30.6` and
+`lat_med=1369 ms` against `59.9 fps / 17-30 ms` for h264 on the same phone and
+cable (BUILD_REPORT §5.1b9). Use AV1 for recording, where nothing is decoded live,
+and h264 or h265 for the mirror.
 
 For the lowest presentation latency the two flags that consistently helped here
 were `--video-buffer=0` (mean 20-34 ms instead of 48-169 ms) and
@@ -504,11 +507,12 @@ second pair of eyes on a touch reaction. Run them from the extracted package
    and plug it back: the device list must refill within ~3 s without you pressing
    Reescanear ADB (gate §21 measures the ticks, not the reconnection).
 
-Two more that the hardware here cannot produce, so they are documented rather
-than claimed: a real **120 fps picture** (this S23 Ultra presents
-`fps_med=59.7–59.9` in its own telemetry, and changing the panel refresh rate is
-forbidden), and **live AV1 in the mirror** (this PC has no hardware AV1 *decode*,
-so AV1 stays in the recorder, where it is proven).
+One more that this hardware cannot produce, so it is documented rather than
+claimed: a real **120 fps picture** (this S23 Ultra presents `fps_med=59.7–59.9`
+in its own telemetry, and changing the panel refresh rate is forbidden). AV1 in
+the mirror is *not* on that list: it was measured and it does display, through the
+decoder's software fallback — it just costs `lat_med=1369 ms` against 17–30 ms for
+h264, which is why no profile ships it (§6 and BUILD_REPORT §5.1b9).
 
 Some of this has now been run against a real device (Lenovo TB-9707F, SM8550,
 Android 14 — see `BUILD_REPORT.md` §5.1l): mirroring with the OSD, hardware decode,

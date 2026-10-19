@@ -4316,7 +4316,8 @@ file in `out/dev/`.
 | §5.3 one icon set, no emojis | closed | gate §20 (`theme_audit`) plus the emoji scan |
 | §6.1 mirror codecs / renderers on the S23 | closed | §12's four arms all produced pictures: `h264/baseline`, `h264/lowlat`, `h265/baseline`, `h265/lowlat`, each `src=2316x1080` with `fps_med` 59.7–59.9 |
 | §6.1 Tap PCM, profiles launch, 60 s stability, overlay, recording | closed | the PCM tap byte count, §11's real launch/stop (`title='1440p 60'`, `--serial=<dev-id-1> present`, clean exit), §18's paired latency census, and the 60 s recording decode check (§5.1b3) |
-| §6.1 "AV1 in the live mirror" | not applicable on this host | no hardware AV1 *decode* here, so AV1 stays in the recorder; documented rather than tested green |
+| §6.1 "Mirror con av1 → se ve" | measured, usable for recording only | the arm decoded and displayed for the whole session (`out/dev/mirror_av1_step11.log`, exit 0 after `--time-limit=20`), but at `lat_med=1369 ms` against `17–30 ms` for h264 (§5.1b9) |
+| §6.1 "Mirror con opengl / vulkan" | measured earlier | both present, 5–30× slower than `direct3d11` on this host (§5.1n's render-driver sweep); neither produces grey |
 | §6.1 "audio suena en PC" (both boxes) | **open, owner** | needs ears in the room; the fork cannot prove audibility and starting media on the phone is forbidden |
 | §6.1 "MP4 de 60 s a 1080p 120 fps" | **open, device limit** | the same phone presents `fps_med=59.7–59.9` in this session's own telemetry, so a 120 fps picture cannot be produced from here without changing device settings, which v4 §7.1 forbids |
 | §6.2 gate §16 PASS | **open, honest SKIP** | `SKIP the phone handed the client 0 audio bytes in 10 s: nothing was playing, so the tap cannot be judged` — the byte count, not the log text, is the load-bearing assertion |
@@ -4328,6 +4329,38 @@ The audit's honest residue is three boxes, all of them gated by the phone or by 
 human rather than by code: the two audibility checks, gate §16's PASS, and the
 120 fps picture. Add the letterbox touch check from §5.1b7 and README §7 is the
 place to work through them.
+
+### 5.1b9. v4 §6.1 d) — the codec matrix in the *live mirror*, measured with a control
+
+The directive asked which of `h264 / h265 / av1` gives grey on the S23 Ultra, and
+an earlier section of this report answered AV1 with a host limitation ("no hardware
+AV1 decode, so it stays in the recorder"). That conclusion was wrong, and the arms
+below are why: the fork does not need hardware AV1 decode to show AV1, because the
+decoder falls back. Both arms ran from the packaged binary, 20 s each, minimal
+flags, read-only (`out/dev/mirror_av1_step11.log`, `out/dev/mirror_h264_step11.log`):
+
+| arm | decode path the client reported | `src` | `fps` | `lat_med` | exit |
+|---|---|---|---|---|---|
+| `--video-codec=h264` | `Video decoding: d3d11va` | `2316x1080` | 59.9 | 17–30 ms | 0 |
+| `--video-codec=av1` | `Failed setup for format d3d11` → `Your platform doesn't support hardware accelerated AV1 decoding` → `Decoder 'video': hardware decoding failed (Function not implemented), falling back to software decoding` | `1920x894` | 30.6 | **1369 ms** | 0 |
+
+So the honest answer to §6.1's AV1 box is: **it is not grey — the picture arrives,
+the session ends cleanly at the time limit, and the fallback is silent to the
+user** — which is the graceful-degradation behaviour §1.3 asks for. What makes AV1
+the wrong codec for a live mirror here is the measured 1.4 s of latency, not a
+missing decoder, and the software path also halves the delivered frame rate. The
+device's own AV1 encoder returned a smaller picture (`1920x894` against
+`2316x1080`, same aspect ratio); that is reported as measured, not explained,
+because explaining it would need the encoder's capability query, which is out of
+this step's scope. AV1 remains the right choice for `--record`, where the file is
+read back later and latency costs nothing (§5.1g decodes real AV1 streams).
+
+One more observation, recorded so it is not misread later: on that software-fallback
+path the telemetry prints `v_kbps=0` in every second while `fps=30.6` frames clearly
+reach the window. So `v_kbps=0` means "the byte counter did not see this path", not
+"no video" — the same class of mistake as reading `a_kbps=0` as an audio failure.
+Whether the fork's bitrate accounting should follow the decoder into its software
+fallback is an open question this step did not chase.
 
 ## 6. What could NOT be validated here, and why
 
