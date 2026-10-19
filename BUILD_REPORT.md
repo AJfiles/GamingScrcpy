@@ -3345,10 +3345,14 @@ actually seen.
 
 **Deliverable.** `dist/GamingScrcpy-win64-fork.zip` is rebuilt from
 `dist\GamingScrcpy\*` at the end of this step; the archive built for the icon
-work measured 126,506,718 bytes and the one that ships with §4 closed measures
-126,536,371. (The copy of this report *inside* the archive can only ever name the
-previous figure — it is packed into the file whose size it quotes.) The packaged
-self-test re-run on the extraction of that archive:
+work measured 126,506,718 bytes, the one that ships with §4 closed measures
+126,536,371, the one that carries the corrected recording arm (§5.1b3)
+measures 126,542,648 and the one that carries the rewritten overlay arm
+(§5.1b4) measures 126,545,574. (The copy of this report *inside* the archive
+can only ever name the previous figure — it is packed into the file whose size
+it quotes.) The packaged self-test re-run on the extraction of the §5.1b3
+archive; its `paired p99` line is the instrument as it stood *then*, and
+§5.1b4 replaces that arm, so read the §5.1b4 re-run as the current one:
 
 ```
 extracted: 163 files under 3 top-level directories
@@ -3630,6 +3634,339 @@ Nothing in §6.3 needs a new measurement to be closed — it was closed by the
 table in §5.1n — but §6.2 (audio end-to-end) is still open for the reason in
 §5.1b0: the phone played nothing while the gate ran, and §16 now says so instead
 of failing the fork.
+
+**And the disagreement then resolved itself, in favour of §5.1n.** A third run of
+the pooled harness (`REPS=1 SECS=12 bash tools/s23_latency_audio.sh`, the same
+phone minutes later, `out/s23_final.log`) reproduces the baseline rather than the
+gate's numbers:
+
+```
+preflight ok (8 telemetry lines in 8 s, fps_med=59.9) scene=live
+LAT h264-d3d11-default     n=12 median=17 p95=19  max=19  fps_med=59 scene=live
+LAT h264-lowlat-60         n=12 median=16 p95=18  max=18  fps_med=59 scene=live
+LAT h265-lowlat-60         n=12 median=18 p95=626 max=626 fps_med=55 scene=live
+LAT h264-lowlat-120        n=11 median=69 p95=118 max=118 fps_med=59 scene=live
+LAT h264-1080p-120         n=12 median=59 p95=811 max=811 fps_med=59 scene=live
+```
+
+17 ms, the same median §5.1n records, with 12 per-second samples instead of one
+window's worth of frame samples. So the instruments are not in dispute about the
+device: they measure different things. The pooled harness drops the frames before
+the pipeline is warm and reports the median of what the running session does; the
+gate's single 17 s `telemetry-summary` includes the warm-up, and a 17 s window
+that catches the phone mid-animation reports what that scene cost. Only the first
+is a baseline, and the 17/16/18 ms of the h264 and h265 default paths is what a
+regression has to beat. The two 120 fps arms again present at ~59 fps, which
+keeps §5.1n's other caveat standing: the 120 fps profiles are validated as
+configurations that run, not as a measured 120 fps picture.
+
+The same run also confirms the PCM tap on real bytes, and that the silence is the
+phone's and not the tap's:
+
+```
+TAP  CONNECT=1 BYTES=1810432 READS=442 FIRST_MS=1066 DETAIL=ok piped=9.43s
+  PASS 1810432 B crossed the pipe, first byte after 1066 ms, 9.43 s decodable as 48 kHz stereo (max_volume: -91.0 dB)
+  NOTE pcm tap: 442 chunks sent, 57 dropped (slow consumer)
+AUDIO opus  SKIP … digital silence (-91 dB) … the device rules forbid starting media
+AUDIO raw   SKIP … digital silence (-91 dB) … the device rules forbid starting media
+```
+
+### 5.1b2. v4 §6.1 — the 60 s 1080p120 recording fails to decode cleanly, with the trace
+
+The same harness run produced the first device-side recording FAIL this project
+has had on the S23 Ultra, so it is written down verbatim rather than smoothed
+over (`out/s23_final.log`, `out/s23/rec1080p120.mp4` kept):
+
+```
+REC  1080p120 size=549413B duration=62.399978s decode_error_lines=1 scene=live
+  FAIL the recording does not decode cleanly
+```
+
+`decode_error_lines` counts the lines `ffmpeg -v error -i file -f null -` prints,
+and there is exactly one, which names where the complaint comes from:
+
+```
+[null @ …] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 5924 >= 5746
+```
+
+Before calling that a product bug it was checked three ways, and the answers do
+not let it be one — yet:
+
+```
+stream 0 h264 video | stream 1 opus audio          (ffprobe stream list)
+video: 0 error lines | audio: 1 error line        (decoded with -map 0:v / -map 0:a)
+audio packets=3109, regressions in the stored dts: none
+```
+
+So the file's own audio dts sequence is strictly increasing across all 3109
+packets, the video stream decodes clean, and `ffprobe` reports the right
+duration. The message comes from the null muxer at the end of the transcode pass,
+not from a corrupt packet stream. *What §5.1b2 then guessed about why — that it
+was Opus-in-MP4 timestamps being re-derived — is disproved in §5.1b3, and the
+arm that produced this FAIL has been replaced.*
+
+What is therefore recorded is a criterion that is too blunt, plus a question that
+stays open. The arm asserts "zero `-v error` lines", so it cannot tell a
+malformed file from an ffmpeg complaint about its own muxing step; that has to
+become "the streams decode and the stored dts is monotonic" (both verified by
+hand above, neither by the harness). And whether a real player stutters on such a
+file is not answered here, because answering it properly needs audio actually
+playing on the phone, which §5.1b0's rules forbid this host from starting. The
+task says exactly that; the §6.1 recording box is left unchecked rather than
+marked passed on this evidence. *(Both halves were settled in §5.1b3: the arm now
+asserts the decode + monotonic-dts criterion, and the complaint turned out to be
+the harness's own, reproduced line-for-line by upstream scrcpy.)*
+
+The offline recorder tests in gate §15/§16 do not cover it: they build their
+input from fixtures and from a Motorola-era path, and gate §16's PCM tap proves
+the fork's audio *bytes* are intact. Nothing in the suite used a live, silent
+Android-14 capture and then asked FFmpeg to decode the whole file, which is what
+this arm does. Tracked as its own task, with the reproduction command:
+
+```
+dist/GamingScrcpy/scrcpy/scrcpy.exe --serial=<dev-id-1> --video-codec=h264 \
+    --max-size=1080 --max-fps=120 --video-bit-rate=30M --record=out/rec.mp4
+# stop with the window close (not a kill: the moov atom is written on exit), then
+ffmpeg -hide_banner -v error -i out/rec.mp4 -f null -
+```
+
+### 5.1b3. v4 §6.1 — the recording arm's criterion replaced, and the complaint shown to be the harness's own
+
+Three 12 s sessions on the S23 (`<dev-id-1>`, all ending by their own
+`--time-limit` so the recorder closes cleanly; logged in `out/dev/adb_audit.log`,
+files kept in `out/probe/`) settle §5.1b2's open question — and retract its
+explanation. Each file was measured with three instruments: the whole-file
+`-v error` pass, the same pass restricted to one stream, and the container's own
+stored packet order. The whole-pass line counts below are re-counted from the
+saved per-arm error files (`out/probe/fork_opus.errors`, `fork_raw.errors`,
+`stock_opus.errors`) and the two right-hand columns from
+`out/probe/summary.txt`, which holds the per-stream counts and the stored-dts
+regression counts for all three files:
+
+| arm | container / streams | `-v error` lines, whole pass | video-only | audio-only | stored dts regressions (v + a) |
+|---|---|---|---|---|---|
+| fork, `--audio-codec=opus` | mp4, h264 + opus | 25 (23 × stream 0, 1 × stream 1, 1 "repeated") | 24 | 1 | 0 + 0 |
+| fork, `--audio-codec=raw` | mkv, h264 + pcm_s16le | 26 (all stream 0) | 26 | 0 | 0 + 0 |
+| **stock scrcpy 5.0.1**, opus | mp4, h264 + opus | **25, same distribution, same numbers** | 24 | 1 | 0 + 0 |
+
+Read against §5.1b2's hypothesis, three things fall out of that table:
+
+* it is **not Opus-in-MP4** — raw PCM in Matroska produces *more* of the same
+  lines (26) than Opus in MP4 does, and the client refuses raw in MP4 anyway
+  (§5.1b2's own audio arms already encode that rule);
+* it is **not the fork** — upstream scrcpy 5.0.1, same phone, same cable, same
+  flags, prints the identical 25 lines with the identical stream split;
+* it is mostly **not even about audio** — in every arm the lines name stream 0,
+  the h264 video. The one 60 s file from §5.1b2 produced a single line about
+  stream 1 instead, which is the real finding: *how many* of these lines a
+  session emits is a property of the transcode step's own re-timing of a
+  variable-frame-rate capture, so counting them measures the harness, not the
+  recorder. Nothing about the files is wrong — every stored dts sequence is
+  monotonic.
+
+**The replacement criterion**, in the REC arm of `tools/s23_latency_audio.sh`:
+
+1. every frame of each stream decodes — `ffprobe -v error -count_frames
+   -select_streams v:0` / `a:0`, asserting on the *error text* rather than on the
+   frame count;
+2. the container's own stored dts is monotonic per stream (0 regressions);
+3. the 60 s session is at least 40 s long;
+4. the old null-muxer line count is still printed, as a NOTE, so a genuine
+   change in it stays visible without becoming a verdict;
+5. every run executes its own positive control: a truncated copy of the file it
+   just recorded must be rejected by check 1, or the arm FAILs with "the decode
+   check is blind".
+
+Against the existing 60 s file (no device needed, `out/s23/rec1080p120.mp4`):
+
+```
+REC  1080p120 size=549413B duration=62.399978s video_frames=3741 decode_errors=0+0 dts_out_of_order=0+0 scene=live
+  NOTE the old criterion would have failed this file on 1 "non monotonically increasing dts" lines from the null-muxer re-time pass (stock scrcpy prints the same on the same session)
+  PASS positive control: the same check rejects a truncated recording
+  PASS every frame of both streams decodes and both stored dts sequences are monotonic (3741 video frames in 62.399978 s)
+```
+
+and the instrument demonstrably is not blind: flipping 8 bytes five times inside
+the mdat of `out/probe/fork_opus.mp4` makes the same check report
+
+```
+[h264 @ …] error while decoding MB 131 31, bytestream -5
+[h264 @ …] error while decoding MB 6 59, bytestream -9
+[h264 @ …] error while decoding MB 10 12, bytestream -7
+```
+
+and changes the md5 of the decoded frames (`7c65293e…` → `85b36524…`) while
+`nb_read_frames` stays 711 — which is exactly why check 1 asserts the error text
+and not the count.
+
+Two harness traps were paid for here and belong with the numbers: `-fps_mode` is
+an *output* option, so `ffmpeg -fps_mode passthrough -i file` prints three lines
+about option placement and measures nothing — that was the first "clean" result
+in this section until the truncated control exposed it; and even placed
+correctly, `-fps_mode passthrough` does not silence the complaint (still 25
+lines), so it is not the fix, which is why the criterion was replaced instead.
+
+**§6.1's recording box** can now be ticked for what it actually asks: a 60 s
+1080p/120 configuration MP4 that plays back — 3741 video frames and the whole
+audio stream decode without one decoder error, monotonic stored timestamps, the
+duration ffprobe expects. The two caveats stay attached, not buried: the file was
+recorded while the phone was silent, so it proves the *muxer and decoder* path,
+not that a user hears something (that is §6.1's audio boxes, still open until
+media plays on the phone); and the 120 fps in its name is the requested
+configuration — this device presented ~59 fps under it (§5.1n, §5.1b1), so the
+file is a 60 fps picture.
+
+**Gate, with the flake reproduced.** The full 26-section run made with this arm
+(`out/dev/verify_v4_recarm.log`) came back `214 passed, 2 failed`, and both lines
+are one event:
+
+```
+18. ... FAIL  p99 grew 2.882 ms with the panel open (budget 1.0 ms)
+    ... FAIL  overlay test exited 1
+```
+
+which is the documented starved-tail family (§5.1an recorded 1.780 ms and then
+1.812 ms the same way, and §5.1ay 1.290 ms and +1.756 ms): re-run alone on an
+idle desktop minutes later the same
+binary reports
+
+```
+OK paired median difference = 0.221 ms, |x| < 1.0 ms
+OK paired p99 difference = -1.169 ms < 1.0 ms (only a longer tail fails)
+OK presented fps with the panel open: 64.4 against 64.6 baseline (drop <= 3)
+OVERLAY OK
+```
+
+so the panel's tail is not longer than the baseline's and this is the harness
+measuring a CPU burst, not a regression. Nothing else moved: the two arms this
+step could break were green in the same run —
+```
+13. PASS  screen.c changes nothing in the mapping path vs v5.0.1
+13. PASS  the launcher emits no device-side resolution/crop/display flag
+14. PASS  our scripts/tools/launcher contain no device write command (2 dirs scanned)
+14. PASS  the fork adds no device write command to app/ (6440 added lines checked)
+ 9. PASS  42 profile(s) valid
+22. PASS  graceful failure: every arm behaved
+26. PASS  37 packaged files, every one byte-identical to tools/
+26. PASS  archive is not older than any binary, tool or theme file in dist/GamingScrcpy
+```
+
+and §16 stayed an honest SKIP — `the phone handed the client 0 audio bytes in
+10 s: nothing was playing, so the tap cannot be judged` — while §12's
+single-window instrument again reported medians of 511/52/163/180 ms for the same
+phone whose pooled per-second baseline is 17 ms (§5.1b1), which is why §5.1n,
+not §12, remains the number to regress against.
+
+### 5.1b4. v4 §7 — the overlay arm's p99 budget was finer than the instrument
+
+The step's gate run then failed the same tail line twice more (2.882 ms in gate
+§18, 6.399 ms inside the packaged self-test), so re-running it was not the
+answer. The census the arm already prints says why p99 cannot carry the verdict
+on this host — two reps of the **baseline** arm, same build, nothing open:
+
+```
+base1: med=3.314ms p90=3.891ms p99= 5.767ms   over1: med=3.271ms p90=4.061ms p99=16.566ms
+base2: med=2.787ms p90=3.715ms p99=20.756ms   over2: med=2.792ms p90=3.733ms p99=22.754ms
+```
+
+The baseline's own p99 moved **14.989 ms** between those two reps; its p90 moved
+**0.176 ms**. A 1 ms budget on p99 therefore asserts a difference smaller than
+the measurement's own resolution — which is how a panel measuring −1.2 ms
+standalone can "grow" 6.4 ms. The pairing by rep (§5.1x) and the one-sided sign
+were both right, so the statistic changed and nothing was dropped:
+
+* **p90 is the judged tail** now, one-sided, `--p90-budget` defaulting to 1 ms;
+* **p99 is still computed, printed and asserted**, with
+  `budget = max(--p99-budget, baseline p99 spread measured in this run)`, so it
+  fails only on a tail longer than the noise it is shown to have;
+* the median assertion is untouched, every per-rep pair and both spreads stay in
+  the output, and the empty-value guard covers the new p90 fields too.
+
+Both directions measured, not assumed:
+
+```
+$ bash tools/overlay_test.sh
+OK paired median difference = 0.185 ms, |x| < 1.0 ms
+OK paired p90 difference = 0.077 ms < 1.0 ms (only a longer tail fails)
+OK paired p99 difference = -1.435 ms < 4.799 ms (budget = max(1.0, baseline p99 spread 4.799))
+OVERLAY OK
+
+$ bash tools/overlay_test.sh --p90-budget=-0.5
+OVERLAY FAIL issues=1        (exit 1)
+```
+
+Two limits of the new instrument stated plainly rather than buried. The first
+attempt at that control was `--p90-budget=0`, and it **passed** — the paired
+difference was −0.061 ms and the test is one-sided, so a budget of zero cannot
+fail it; demonstrating the FAIL branch needs a budget below the noise, not equal
+to nothing. And because the p99 budget is now the measured noise floor, that line
+can no longer be driven red by its own option while the machine is noisy: the
+section's teeth are the median and the p90 line, with p99 printed as evidence.
+
+And the budget adapts *downwards*, which the packaged re-run proves — from the
+extraction of the archive carrying this tool (`out/dev/selftest_v4_step7.log`,
+163 files, exit 0; that archive measured 126,544,840 bytes, and every repack that
+only re-words this report moves the file by a few hundred bytes more):
+
+```
+NOTE base1.log: med=3.255ms p90=3.776ms p99=6.386ms   over1.log: med=3.286ms p90=3.825ms p99=4.574ms
+NOTE base2.log: med=3.268ms p90=3.777ms p99=5.946ms   over2.log: med=3.285ms p90=3.899ms p99=7.210ms
+NOTE rep 1 pair: median 0.031 ms, p90 0.049 ms, p99 -1.812 ms (panel minus baseline)
+NOTE rep 2 pair: median 0.017 ms, p90 0.122 ms, p99 1.264 ms (panel minus baseline)
+NOTE baseline's own rep-to-rep spread: p90 0.001 ms, p99 0.440 ms
+OK paired median difference = 0.024 ms, |x| < 1.0 ms
+OK paired p90 difference = 0.086 ms < 1.0 ms (only a longer tail fails)
+OK paired p99 difference = -0.274 ms < 1.000 ms (budget = max(1.0, spread 0.440))
+OVERLAY OK  THEME OK pairs=15  UIAUTO OK  AUTOSCAN OK  SHORTCUTS OK rows=29 categories=4
+ICON PROBE pass=8 fail=0     PKGSELFTEST OK (163 files, 3 dirs)
+```
+
+The desktop was quieter there, so the floor collapsed back to the directive's own
+1 ms instead of excusing a 7 ms tail — the option is a measurement, not a licence.
+Look at rep 1 before reading the verdicts: `p99 -1.812 ms` is the same magnitude,
+in the same impossible direction, that the old best-vs-best pairing once printed
+as `FAIL p99 moved 1.812 ms with the panel open` (§5.1an). Under the paired
+estimator it is what it always was — a rep that caught a quieter moment — now
+printed as a `NOTE` and judged by its sign. The `THEME FAIL issues=7` and
+`SHORTCUTS FAIL issues=2` lines in the same log are the two must-FAIL fixtures
+(`=== theme audit, broken palette (must FAIL) ===` at line 104 and
+`=== shortcut duplicate fixture (must FAIL) ===` at line 336), each printed after
+its own real arm went green at lines 102 and 334.
+
+The gate run that closes the step — `bash tools/verify_all.sh`, same desktop,
+other processes present — turned the p99 line into exactly the case it was
+rewritten for, and it passed on the noise floor instead of on a re-roll
+(`out/dev/verify_v4_step7.log`):
+
+```
+215 passed, 0 failed
+
+18. the filter panel keeps its latency budget (tools/overlay_test.sh)
+  note  base1.log: frames=1000 samples=1000 med=3.304ms p90=3.891ms p99= 4.595ms max=23.677ms
+  note  over1.log: frames=1000 samples=1000 med=3.271ms p90=3.809ms p99= 4.842ms max=19.834ms
+  note  base2.log: frames=1000 samples=1000 med=3.232ms p90=3.874ms p99=12.238ms max=22.559ms
+  note  over2.log: frames=1000 samples=1000 med=3.252ms p90=3.984ms p99=15.009ms max=31.677ms
+  note  rep 1 pair: median -0.033 ms, p90 -0.082 ms, p99 0.247 ms (panel minus baseline)
+  note  rep 2 pair: median 0.020 ms, p90 0.110 ms, p99 2.771 ms (panel minus baseline)
+  note  baseline's own rep-to-rep spread: p90 0.017 ms, p99 7.643 ms
+  PASS  paired median difference = -0.006 ms, |x| < 1.0 ms
+  PASS  paired p90 difference = 0.014 ms < 1.0 ms (only a longer tail fails)
+  PASS  paired p99 difference = 1.509 ms < 7.643 ms (budget = max(1.0, baseline p99
+        spread 7.643); only a longer tail fails)
+```
+
+Read the second rep before trusting the third PASS: the baseline's p99 jumped
+4.595 → 12.238 ms with nothing open, and the panel's followed it (4.842 → 15.009
+ms). Under the old budget that pair alone was a FAIL; the p90 line, whose own
+rep-to-rep spread is 0.017 ms, is what says the panel costs nothing. Sections
+touched by this step in the same run: §9 `42 profile(s) valid` and
+`builtin=20 valid=20 desc_es=20 desc_en=20`, §13/§14 (the two invariants),
+§15 `354 unique keys`, §16 `SKIP the phone handed the client 0 audio bytes in
+10 s: nothing was playing, so the tap cannot be judged`, §21 `16 adb children in
+24s via event-subscription` (the §5.1ap counting-floor problem, now measured by
+to `Win32_ProcessStartTrace` instead of polling WMI), §25 `accent pixels:
+app.ico=10 exe=78 at 32x32`, §26 `37 packaged files, every one byte-identical to
+tools/`.
 
 
 ## 6. What could NOT be validated here, and why

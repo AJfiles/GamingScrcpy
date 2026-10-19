@@ -305,19 +305,76 @@ wait 2>/dev/null
 if [ -s "$rec" ]; then
     dur=$(ffprobe -hide_banner -v error -show_entries format=duration \
           -of csv=p=0 "$rec")
-    dec_errs=$(ffmpeg -hide_banner -v error -i "$rec" -f null - 2>&1 | wc -l)
-    printf 'REC  1080p120 size=%sB duration=%ss decode_error_lines=%s scene=%s\n' \
-        "$(wc -c < "$rec" | tr -d ' ')" "${dur:-n/a}" "$dec_errs" \
+    # The criterion is "both streams fully decode and the stored dts is
+    # monotonic", not "ffmpeg -v error prints nothing". The old arm counted the
+    # lines of a transcode-to-null pass, and that pass emits "non monotonically
+    # increasing dts to muxer" for a healthy variable-frame-rate recording: the
+    # null muxer re-times the frames it is handed. Upstream scrcpy 5.0.1 draws
+    # the identical message from the same session (BUILD_REPORT §5.1b3), so the
+    # count measured the harness. ffprobe -count_frames decodes every frame with
+    # no muxer in the loop and still reports decoder errors.
+    dec_errs() { # stream letter -> decoder error lines, and frame count on stdout
+        ffprobe -hide_banner -v error -count_frames -select_streams "$1:0" \
+            -show_entries stream=nb_read_frames -of csv=p=0 "$rec"
+    }
+    vout=$(dec_errs v); aout=$(dec_errs a)
+    vframes=$(grep -o '^[0-9]*$' <<< "$vout" | tail -1)
+    verr=$(grep -v '^[0-9]*$' <<< "$vout")
+    aer=$(grep -v '^[0-9]*$' <<< "$aout")
+    # stored packet order, read straight out of the container
+    dts_bad() { # stream letter -> packets whose dts is below its predecessor's
+        ffprobe -hide_banner -v error -select_streams "$1:0" -show_entries \
+            packet=dts -of csv=p=0 "$rec" 2>/dev/null \
+            | grep -E '^-?[0-9]+$' \
+            | awk 'NR>1 && $1+0<prev {c++} {prev=$1+0} END{print c+0}'
+    }
+    vbad=$(dts_bad v); abad=$(dts_bad a)
+    muxnote=$(ffmpeg -hide_banner -v error -i "$rec" -f null - 2>&1 \
+              | grep -c 'non monotonically increasing dts' || true)
+    printf 'REC  1080p120 size=%sB duration=%ss video_frames=%s decode_errors=%s+%s dts_out_of_order=%s+%s scene=%s\n' \
+        "$(wc -c < "$rec" | tr -d ' ')" "${dur:-n/a}" "${vframes:-0}" \
+        "$([ -n "$verr" ] && printf '%s' "$verr" | wc -l | tr -d ' ' || echo 0)" \
+        "$([ -n "$aer" ] && printf '%s' "$aer" | wc -l | tr -d ' ' || echo 0)" \
+        "$vbad" "$abad" \
         "$( [ "$scene_live" = 1 ] && echo live || echo static )"
     if [ "$scene_live" = 0 ]; then
         printf '  SKIP a dark panel encodes almost nothing: %sB for 60 s is the scene, not the recorder\n' \
             "$(wc -c < "$rec" | tr -d ' ')"
         skips=$((skips+1))
     else
+        rfails=0
         awk -v d="${dur:-0}" 'BEGIN{ exit !(d < 40) }' && {
-            printf '  FAIL the 60 s recording is only %s s\n' "${dur:-0}"; fails=$((fails+1)); }
-        [ "$dec_errs" -eq 0 ] || { printf '  FAIL the recording does not decode cleanly\n' \
-                                   ; fails=$((fails+1)); }
+            printf '  FAIL the 60 s recording is only %s s\n' "${dur:-0}"; rfails=$((rfails+1)); }
+        [ -n "$verr" ] && { printf '  FAIL the video stream does not decode: %s\n' \
+            "$(head -1 <<< "$verr")"; rfails=$((rfails+1)); }
+        [ -n "$aer" ] && { printf '  FAIL the audio stream does not decode: %s\n' \
+            "$(head -1 <<< "$aer")"; rfails=$((rfails+1)); }
+        [ "${vframes:-0}" -gt 0 ] || { printf '  FAIL no video frame could be decoded\n' \
+            ; rfails=$((rfails+1)); }
+        [ "$vbad" -eq 0 ] && [ "$abad" -eq 0 ] || {
+            printf '  FAIL the container stores out-of-order dts (video %s, audio %s packets)\n' \
+                "$vbad" "$abad"; rfails=$((rfails+1)); }
+        # kept visible, deliberately not asserted: the null muxer's own re-timing
+        printf '  NOTE the old criterion would have failed this file on %s "non monotonically increasing dts" lines from the null-muxer re-time pass (stock scrcpy prints the same on the same session)\n' "${muxnote:-0}"
+        # and prove the new instrument is not simply blind: a truncated copy of
+        # the same file must be rejected by it
+        cutf=$out/rec_truncated.mp4
+        head -c $(($(wc -c < "$rec") / 2)) "$rec" > "$cutf"
+        if ffprobe -hide_banner -v error -count_frames -select_streams v:0 \
+                -show_entries stream=nb_read_frames -of csv=p=0 "$cutf" 2>&1 \
+           | grep -q '[a-z]'; then
+            printf '  PASS positive control: the same check rejects a truncated recording\n'
+        else
+            printf '  FAIL the decode check is blind: it accepted a truncated recording\n'
+            rfails=$((rfails+1))
+        fi
+        rm -f "$cutf"
+        if [ "$rfails" -eq 0 ]; then
+            printf '  PASS every frame of both streams decodes and both stored dts sequences are monotonic (%s video frames in %s s)\n' \
+                "$vframes" "${dur:-?}"
+        else
+            fails=$((fails+rfails))
+        fi
     fi
 else
     printf 'REC  FAIL no 1080p120 file\n'; fails=$((fails+1))

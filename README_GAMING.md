@@ -501,6 +501,15 @@ What still needs your hands and eyes:
    without holding the mutex, so a client could crash as soon as the producer
    attached its sinks before the recorder thread had finished opening the file
    (`BUILD_REPORT.md` §5.1i).
+   How to judge the file you get: decode it, do not count warnings.
+   `ffprobe -v error -count_frames -select_streams v:0 -show_entries
+   stream=nb_read_frames -of csv=p=0 recording.mp4` reads every frame and prints
+   text only when a frame genuinely fails (`error while decoding MB …`); repeat
+   with `-select_streams a:0` for the audio. A
+   `non monotonically increasing dts to muxer` line from
+   `ffmpeg -i file -f null -` is **not** a broken recording: that pass re-times
+   the frames it is handed, and upstream scrcpy emits the identical message for
+   the same phone session (`BUILD_REPORT.md` §5.1b3).
 3. A/V sync: record with `--audio-codec=opus` and clap once on camera at the
    start; the waveform spike should sit within ~1 frame of the visual clap.
    (The recorder itself is already proven to interleave two timelines by pts and
