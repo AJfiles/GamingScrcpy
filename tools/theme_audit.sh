@@ -50,8 +50,20 @@ else
     bad "$accents brushes named Accent* (must be exactly one)"
 fi
 for k in $(grep -o 'x:Key="[A-Za-z0-9]*" Color=' "$APP" | sed 's/x:Key="//; s/" Color=//' \
-           | grep -v '^Bg$\|^Panel$\|^Panel2$\|^Line$\|^Fg$\|^FgDim$\|^Accent$\|^Good$\|^Warn$\|^Danger$\|^PrimaryBg$\|^RecordBg$\|^StopBg$\|^ComboHi$'); do
+           | grep -v '^Bg$\|^Panel$\|^Panel2$\|^Elevated$\|^Sunken$\|^Edge$\|^Line$\|^Fg$\|^FgDim$\|^Accent$\|^Good$\|^Warn$\|^Danger$\|^PrimaryBg$\|^RecordBg$\|^StopBg$\|^ComboHi$'); do
     bad "colour '$k' is neither a surface, a foreground, the accent nor a named state"
+done
+
+# The three depth surfaces v4 §5.1 asks for are named here, so the allowlist
+# above is a role registry rather than a hole: a brush may only be new if it is
+# one of these three, and then it has to be the colour the directive picked.
+for pair in 'Elevated:#FF1E2130' 'Sunken:#FF0A0B0F' 'Edge:#FF2A2D3A'; do
+    name=${pair%%:*}; hex=${pair##*:}
+    if grep -q "x:Key=\"$name\" Color=\"$hex\"" "$APP"; then
+        ok "$name is $hex, the depth surface v4 §5.1 names"
+    else
+        bad "$name is not declared as $hex in the theme"
+    fi
 done
 
 # -- radius -------------------------------------------------------------------

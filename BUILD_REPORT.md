@@ -3242,6 +3242,396 @@ row for the length of the animation. The fade alone was kept; the scale is not
 implemented.
 
 
+### 5.1az. v4 §4 — the exe logo: how it was drawn, and which claims are proven
+
+§4.1 offered two exits: make the icon (option A) or hand back a spec and leave
+the art to the user (option B), with an explicit instruction not to ship a
+generic placeholder silently. Option A was possible, so option B is not needed
+and no placeholder is in the build.
+
+**How the art was produced.** The directive suggested SVG plus ImageMagick or
+Inkscape CLI. Neither is installed on this host, and the `convert` that *is* on
+PATH is Windows' NTFS volume tool, not ImageMagick, so following the letter of
+that recipe would have produced nothing. `tools/make_app_icon.ps1` draws the
+same mark with GDI+ (`System.Drawing`) instead: a rounded `#0E0F13` tile with a
+`#2A2D3A` border and a solid `#4FA3FF` play triangle, which is one of the shapes
+§4.1 lists ("play triangle + stream"), in the v3 palette, with no emoji and no
+font. The lightning notch that splits the triangle is only drawn from 48 px up:
+at 16 px the cut is under two pixels wide and turns the glyph into mud in the
+Explorer details column. One `.ico` carries all seven sizes (16, 24, 32, 48, 64,
+128, 256) and weighs 11,311 bytes; the per-size PNG previews land in `out/icon/`.
+
+**Wiring.** `launcher/Assets/app.ico`, referenced by
+`<ApplicationIcon>Assets\app.ico</ApplicationIcon>` in
+`launcher/GamingScrcpyLauncher.csproj`. No `Window Icon` is set in XAML, so the
+window inherits the embedded application icon.
+
+**Proof.** §4.1 asks that the icon be seen "in the explorer, in the taskbar, and
+in the executable". Those are three different Windows mechanisms, so
+`tools/app_icon_probe.ps1` checks them separately instead of asserting one
+screenshot. Verbatim run against the published exe:
+
+```
+note exe: <repo>\dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe
+note app.ico: type=1 entries=7 sizes=16,24,32,48,64,128,256
+OK   7 resolutions embedded
+OK   resolution 16 present
+OK   resolution 32 present
+OK   resolution 48 present
+OK   resolution 256 present
+note accent pixels: app.ico=10 exe=78 at 32x32
+OK   the exe draws the accent: the brand image, not a placeholder
+OK   the live window answers WM_GETICON ICON_SMALL (title bar)
+OK   the live window answers WM_GETICON ICON_BIG (taskbar / Alt+Tab)
+
+ICON PROBE pass=8 fail=0
+ICON PROBE OK
+```
+
+What the three arms do and do not say. The `ICONDIR` parse proves the file
+really holds seven resolutions — a single-size `.ico` would look right in the
+taskbar and blur into a square in Explorer's small-icon view.
+`Icon::ExtractAssociatedIcon` reads the icon group the *exe* embeds, which is
+the image Explorer and a shortcut draw; the accent-pixel census (a colour within
+±40 of `#4FA3FF`, anti-aliasing included) is what turns "the exe has an icon"
+into "the exe has *this* icon": 10 accent pixels at 32×32 from `app.ico`, 78
+from the exe's own extracted bitmap, so neither the generic Windows page nor an
+empty icon. The third arm starts the published exe, waits for the real window
+handle, and asks it `WM_GETICON` for `ICON_SMALL` and `ICON_BIG` — that is the
+title bar and the taskbar/Alt+Tab image, read from the live window rather than
+from the file. `SMTO_ABORTIFHUNG` is used so a wedged window fails the probe
+instead of hanging the gate, and the process is closed with `CloseMainWindow()`
+(checked) rather than killed.
+
+What is *not* proven: nobody looked at a screen. The probe reads the handles and
+the pixels Windows would blit, not the blit. One caveat worth knowing before
+judging the build by eye — Explorer caches icons per path, so replacing the exe
+under the same name can keep showing the old generic page until the cache is
+refreshed (`ie4uinit.exe -show`, or a different folder). That is the cache, not
+this file.
+
+**Gate.** §25 of `tools/verify_all.sh` runs the probe and relays its lines, and
+additionally checks the wiring statically so the section still says something
+when no exe has been published: `ApplicationIcon` must point at
+`Assets/app.ico`, and the `.ico` must exist and be too big to be a stub. The
+probe exits 2 (SKIP) when either file is missing, which keeps the section
+honest-but-green on a sources-only checkout; a missing verdict line, a non-zero
+`fail=`, or fewer than the 6 runtime claims all FAIL the gate.
+
+The section carries its own positive control: the same probe run against
+`notepad.exe` must fail, and it does —
+
+```
+note accent pixels: app.ico=10 exe=0 at 32x32
+FAIL the exe's icon has no accent pixels: it is not app.ico (10 vs 0)
+FAIL the live window has no ICON_SMALL (title bar)
+FAIL the live window has no ICON_BIG (taskbar / Alt+Tab)
+ICON PROBE pass=5 fail=3
+```
+
+so the green above is not a check that would pass on anything: it separates the
+brand mark from a generic page (0 accent pixels) and a window that carries no
+icon handle at all.
+
+**Splash (§4.2): not built, on purpose.** The item was marked optional, and the
+reason to decline it is a design one rather than a measurement: the launcher
+opens on a device picker that is already the state the user wants to see, so a
+400×300 logo window would be an extra window to show and tear down in front of
+a screen that has no state change to explain. §5.2's own rule is "animación
+donde ayuda a entender un cambio de estado", and §24 caps every duration at
+250 ms, so a ≤500 ms splash would sit against both. The icon mark above is
+already what a shortcut or the taskbar shows, which is where branding is
+actually seen.
+
+**Deliverable.** `dist/GamingScrcpy-win64-fork.zip` is rebuilt from
+`dist\GamingScrcpy\*` at the end of this step; the archive built for the icon
+work measured 126,506,718 bytes and the one that ships with §4 closed measures
+126,536,371. (The copy of this report *inside* the archive can only ever name the
+previous figure — it is packed into the file whose size it quotes.) The packaged
+self-test re-run on the extraction of that archive:
+
+```
+extracted: 163 files under 3 top-level directories
+OK paired median difference = -0.016 ms, |x| < 1.0 ms
+OK paired p99 difference = -1.794 ms < 1.0 ms (only a longer tail fails)
+OK presented fps with the panel open: 64.6 against 63.0 baseline (drop <= 3)
+OVERLAY OK
+THEME OK pairs=15            (and the broken-palette fixture failing as required)
+UIAUTO OK
+ICON PROBE pass=8 fail=0     (the shipped exe, from inside the extraction)
+PKGSELFTEST OK (163 files, 3 dirs)
+```
+
+`THEME OK` from the extraction is the fix of the stale-copy bug described below:
+before it, the same arm reported `THEME FAIL issues=3` while the build tree was
+green.
+
+That run is also what caught a packaging bug of its own kind: the first pass
+reported `FAIL TxtProfileName missing under TabAdvanced / PKGSELFTEST FAIL
+issues=1`, and the cause was not the launcher. `dist/GamingScrcpy/tools/` is a
+copy of the harnesses rather than a link, and four of its files were snapshots
+from before the §2.2 fix that moved the collapsed form fields out of the tab
+plan and presses **Nuevo perfil** instead. The build tree was green while the
+thing the user actually unzips was running an obsolete check — exactly the
+"passes at home, dies in the package" class this script exists to catch, only
+pointed the other way. The packaged tool set is now copied from `tools/` at
+pack time (38 files, byte-identical to the repo), which is what turned that arm
+green and made `TxtProfileName` pass as a form field reached through its button.
+
+The overlay A/B measured from the extraction on this build (the fade included,
+1000 frames per arm, two paired reps):
+
+```
+OK paired median difference = 0.004 ms, |x| < 1.0 ms
+OK paired p99 difference = 0.177 ms < 1.0 ms (only a longer tail fails)
+OK presented fps with the panel open: 64.9 against 64.6 baseline (drop <= 3)
+```
+
+**The packaging bug that §26 did not yet cover, and now does.** Chasing the
+"stale shipped harnesses" class turned out to be only one of three ways a package
+stops being the current build. The other two were found while repacking for the
+icon, and `tools/pkg_tools_drift.sh` now checks all three:
+
+```
+OK 37 packaged files, every one byte-identical to tools/
+OK packaged launcher is not older than any launcher source or the app icon
+OK archive is not older than any file in dist/GamingScrcpy
+PKGDRIFT OK
+```
+
+The second arm exists because a `dotnet publish -o ..\dist\GamingScrcpy\launcher`
+run from bash had its backslashes eaten and wrote into a sibling directory called
+`launcher/..distGamingScrcpylauncher/` instead: the publish reported success, and
+the shipped exe kept the previous build. It happened to be byte-identical (md5
+`b67d34ca47837de7dfb882f7d18220e7` for both copies), so nothing user-visible was
+wrong this time — which is exactly why the check needed to exist rather than stay
+luck. The duplicate was deleted after that md5 comparison, not before it. The
+third arm is the plain "docs changed, archive did not" case.
+
+Neither new arm is accepted on its own green. Both were driven into the failure
+they are meant to catch by moving one mtime into the future and restored
+immediately after:
+
+```
+FAIL dist/GamingScrcpy/launcher/GamingScrcpyLauncher.exe is older than launcher/App.xaml: the package carries a launcher built before that change
+FAIL the archive is older than dist/GamingScrcpy/BUILD_REPORT.md: dist/ changed after the last repack
+PKGDRIFT FAIL
+control rc=1
+```
+
+Gate §26 relays every line of that harness now instead of only the first, so a
+stale exe or a stale archive fails the run rather than printing one green sentence
+about harness copies.
+
+Writing those arms immediately found a third copy of the same bug, one that the
+packaged self-test had been hiding: `dist/GamingScrcpy/tools/theme/` holds a
+reference copy of `App.xaml`, `Loc.cs` and `MainWindow.xaml`, because an
+extracted package has no build tree for `tools/theme_audit.sh` to read. That copy
+was from 17 Oct, i.e. before §5.1 added the three depth brushes, so unzipped and
+run, the theme audit asserted `Elevated`/`Sunken`/`Edge` against an obsolete theme
+and failed with three findings while the build tree said the palette was green:
+
+```
+FAIL Elevated is not declared as #FF1E2130 in the theme
+FAIL Sunken is not declared as #FF0A0B0F in the theme
+FAIL Edge is not declared as #FF2A2D3A in the theme
+THEME FAIL issues=3
+```
+
+The inputs were refreshed from `launcher/`, and the harness now compares them
+file by file, so this cannot go quiet again:
+
+```
+OK 37 packaged files, every one byte-identical to tools/
+OK shipped theme inputs (App.xaml Loc.cs MainWindow.xaml ) are the launcher's own
+OK packaged launcher is not older than any launcher source or the app icon
+OK archive is not older than any binary, tool or theme file in dist/GamingScrcpy
+PKGDRIFT OK
+```
+
+The last arm ignores the three markdown files at the package root on purpose. The
+report inside an archive can never quote the size of the archive that carries it —
+it would have to be written after the compression it describes — and letting that
+impossible dependency drive the check would make the gate unwinnable instead of
+honest.
+
+**v4 §0's device-write distinction, in the README.** §0 of this directive asks
+explicitly that the `scrcpy-server.jar` copy be documented as *not* a §4.2
+violation, in README §3. It was not there, and the "read-only rule" paragraph in
+§7 said "nothing … pushes files", which the fork's own server copy contradicts.
+Both are now written out: §3 carries the paragraph naming what lands on the
+device (`/data/local/tmp/scrcpy-server.jar`, run with `app_process`, overwritten
+by the next session), that it is upstream behaviour of the binary rather than a
+project write, and that it therefore appears in the session log and not in
+`out/dev/adb_audit.log`, which records what the harnesses of this repo run. The
+§7 paragraph points at it instead of overstating the rule.
+
+**Gate, in full.** `bash tools/verify_all.sh` with all of the above in the tree
+(`out/gate_v4pkg2.log`):
+
+```
+25. exe logo: the .ico wiring, its resolutions, and the icon Windows draws
+  PASS  launcher/GamingScrcpyLauncher.csproj sets <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+  PASS  launcher/Assets/app.ico is present (11311 bytes)
+  note  app.ico: type=1 entries=7 sizes=16,24,32,48,64,128,256
+  PASS  7 resolutions embedded
+  note  accent pixels: app.ico=10 exe=78 at 32x32
+  PASS  the exe draws the accent: the brand image, not a placeholder
+  PASS  the live window answers WM_GETICON ICON_SMALL (title bar)
+  PASS  the live window answers WM_GETICON ICON_BIG (taskbar / Alt+Tab)
+  note  icon probe verdict: pass=8 fail=0 (exit 0)
+  PASS  [control §25] the probe rejects a stock Windows exe (ICON PROBE pass=5 fail=3)
+
+26. the package is the current build: tools, launcher exe, archive
+  PASS  37 packaged files, every one byte-identical to tools/
+  PASS  packaged launcher is not older than any launcher source or the app icon
+  PASS  archive is not older than any file in dist/GamingScrcpy
+
+summary
+  213 passed, 0 failed
+```
+
+The run before the package-freshness arms existed reported 211/0 (`out/gate_v4logo.log`),
+and the one that first exposed them reported 207 passed / 5 failed — those five
+were §20 (the theme audit could not see the three new depth brushes), §16 (an
+asleep phone and a broken tap were indistinguishable) and the packaged copies of
+both harnesses. Each is documented above with what it turned out to be.
+
+Two arms that a green summary would hide are worth naming explicitly. §16 does
+not pass here, and does not fail either:
+
+```
+16. audio end-to-end on a device that can do it (directive v3 §1.3)
+  SKIP  the phone handed the client 0 audio bytes in 10 s: nothing was playing, so the tap cannot be judged
+```
+
+That is v4 §6.2 staying open until somebody plays audio on the S23 Ultra, exactly
+as recorded in §5.1b0 — the harness can now tell "the tap lost data" from "there
+was no data", so it says the second one instead of reporting a product bug.
+
+§12, by contrast, did measure the S23 Ultra in this run, with a live scene. That
+is new: the earlier attempt aborted at its preflight. The numbers are in §5.1b1
+below, and they say the opposite of what v4 §6.3 expected.
+
+
+### 5.1b0. v4 §6 — the S23 Ultra re-attached, and what it could and could not answer
+
+The Samsung (`<dev-id-1>`, reported by the client as `samsung SM-S918B (Android
+14)`, so SDK 34) was attached again while §4 was being packaged, so both device
+harnesses ran against it. Read `out/s23_matrix_v4.log` and `out/s23_latency_v4.log`
+for the raw output; what follows is what those numbers do and do not say.
+
+**The panel was asleep or showing a still image.** `telemetry=` counts the
+seconds in which the fork actually presented a new frame, and every arm landed
+between 1 and 6 lines per 10 s instead of ~10, which is what a moving picture
+gives. The latency harness noticed first and refused to measure anything:
+
+```
+ABORT  the preflight painted no frame, so every arm below would measure 0
+```
+
+So §6.3 stays open: **the S23 latency baseline cannot be taken from a locked or
+frozen panel**, and the Motorola numbers in §5.1n remain the last measured
+baseline. §6.1's five "se ve" arms did each present frames (h264 4, h265 6,
+opengl 5, vulkan 1, av1 3), which is a real "not grey" answer but not a
+fluency or latency answer.
+
+**One arm failed informatively, and it is the §1.2(d) result.** With
+`--video-codec=av1` on the D3D11 renderer the client printed:
+
+```
+ERROR: [FFmpeg] Failed setup for format d3d11: hwaccel initialisation returned error.
+ERROR: [FFmpeg] Your platform doesn't support hardware accelerated AV1 decoding.
+WARN: Decoder 'video': hardware decoding failed (Function not implemented), falling back to software decoding
+```
+
+The GPU on this host has no AV1 *decoder*, so the interop path is refused and
+FFmpeg falls back. The window kept painting (3 telemetry lines) and the process
+exited normally, which is the behaviour §1.3 asks for: an unsupported combination
+costs frames, not the session. The device side also logged
+`[server] ERROR: Capture/encoding error: java.lang.IllegalArgumentException:`
+during that arm, so the AV1 encoder on the phone was rejecting something too —
+worth one focused look if a user ever reports grey-with-AV1, but with a still
+panel the two cannot be told apart from here.
+
+**Audio: the two codecs disagree, and the gate now says why.** `audio-raw`
+reached `a_kbps_max=188` while the `audio-opus` arm and every other arm reported
+`a_kbps_max=0`, and the PCM tap recorded no bytes. That is the same
+nothing-is-playing signature the note in `project-telemetry-signal-meanings`
+describes (a silent `STREAM_MUSIC` gives an empty capture), so `§16` was changed
+rather than left to lie: `tools/audio_e2e_test.ps1` now compares the tap against
+the recorder, which is fed from the same decoded packets —
+
+```
+FAIL  the client decoded N bytes of audio but the PCM tap got 0    (product bug: the tap lost data)
+SKIP  the phone handed the client 0 audio bytes in 10 s: nothing was playing (exit 2)
+```
+
+so a silent phone can no longer read as either a broken tap or a passing audio
+test. On this run the phone was silent, so gate §16 SKIPs with the manual step.
+**To close §6.1's audio rows and §6.2, the phone has to be playing something**
+(video, music, a game with sound) and the panel awake:
+
+```
+RUN=10 bash tools/s23_matrix.sh
+REPS=3 SECS=12 bash tools/s23_latency_audio.sh
+bash tools/verify_all.sh          # §16 must go green with audio playing
+```
+
+Device commands of this session are in `out/dev/adb_audit.log`: `adb devices`
+and one read-only `dumpsys power` to check the panel state, plus the scrcpy
+sessions the harnesses started themselves (their server jar copy is the
+pre-existing upstream exception in §0/§3).
+
+
+### 5.1b1. v4 §6.3 again — the same phone measured by two harnesses, ten minutes apart, disagrees by 10×
+
+§5.1n already carries the S23 Ultra latency baseline: `tools/s23_latency_audio.sh`
+pooled every `lat=` sample of 3 reps × 12 s per arm and produced a **17 ms**
+median for `h264 + direct3d11, defaults`, which is what v4 §6.3 asked for and
+what §5.1n says to regress against.
+
+What is new here is that gate §12 measured the same phone, in the same state
+(`scene=live`, `src=2316x1080`, awake, USB, direct3d11) with its own harness —
+`tools/device_latency_probe.sh`, one 17 s window per arm — twice, ten minutes
+apart:
+
+```
+arm            run A med/p90/p99/avg   run B med/p90/p99/avg   fps A/B
+h264/baseline      103 /  319 /  427 /  48    307 / 1167 / 1584 / 162   47.9 / 59.7
+h264/lowlat        600 /  835 / 1091 / 350    123 /  439 /  440 / 139   59.9 / 59.9
+h265/baseline       58 /  287 /  347 /  18    289 / 1085 / 1097 / 119   59.8 / 59.8
+h265/lowlat         57 /  339 /  624 /  29    186 /  303 /  729 /  51   59.9 / 59.9
+```
+
+Two facts, and no conclusion beyond them.
+
+**The same arm differs from itself by 3-5× between runs.** `h264/lowlat` was the
+worst of run A (600 ms) and the second best of run B (123 ms); `h265/baseline`
+went 58 → 289 ms. Within each run the four arms sit in the same band, so this
+harness cannot rank h264 against h265 or decide whether `--game-low-latency`
+helps on this device, and it certainly cannot be read as "the S23 is slower than
+the tablet" — run A's best (57 ms) and run B's worst (307 ms) are the same
+device, flags and scene.
+
+**And both runs are far above the 17 ms in §5.1n.** That is a disagreement
+between instruments, not a regression: `s23_latency_audio.sh` pools 33 per-second
+samples of a repeating arm set, `device_latency_probe.sh` prints the
+`telemetry-summary` of one 17 s window, whose own median is taken over every
+frame of that window including the ones that arrive while the session is still
+warming up. Which of those two definitions should be the baseline is a question
+about the harnesses, and it is worth answering before §12's numbers are used for
+anything; it is recorded here as an open inconsistency rather than resolved by
+picking the flattering one. Until it is, **§5.1n's pooled 17 ms median stays the
+reference**, exactly as that section already states, and the gate §12 lines are
+reported as what the phone did in that window and nothing more.
+
+Nothing in §6.3 needs a new measurement to be closed — it was closed by the
+table in §5.1n — but §6.2 (audio end-to-end) is still open for the reason in
+§5.1b0: the phone played nothing while the gate ran, and §16 now says so instead
+of failing the fork.
+
+
 ## 6. What could NOT be validated here, and why
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so

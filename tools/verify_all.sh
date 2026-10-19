@@ -838,6 +838,84 @@ else
     vp_relay 24
 fi
 
+head_ "25. exe logo: the .ico wiring, its resolutions, and the icon Windows draws"
+csproj="$ROOT/launcher/GamingScrcpyLauncher.csproj"
+ico="$ROOT/launcher/Assets/app.ico"
+if [ ! -f "$csproj" ]; then
+    printf '  \033[33mnote\033[0m  %s\n' "SKIP: no launcher project at ${csproj#$ROOT/}"
+elif ! grep -qE '<ApplicationIcon>Assets[/\\]app\.ico</ApplicationIcon>' "$csproj"; then
+    bad "the project does not set ApplicationIcon to Assets/app.ico: the exe would ship the generic Windows page"
+else
+    ok "launcher/GamingScrcpyLauncher.csproj sets <ApplicationIcon>Assets/app.ico</ApplicationIcon>"
+fi
+if [ -f "$ico" ]; then
+    size=$(wc -c < "$ico" | tr -d ' ')
+    if [ "$size" -ge 1000 ]; then
+        ok "launcher/Assets/app.ico is present ($size bytes)"
+    else
+        bad "launcher/Assets/app.ico is only $size bytes: that is not a real multi-resolution icon"
+    fi
+else
+    printf '  \033[33mnote\033[0m  %s\n' "SKIP: no launcher/Assets/app.ico to check"
+fi
+# The three claims the directive asks about (explorer / taskbar / exe) need the
+# published exe, so this arm SKIPs when only the sources are present.
+ic="$(powershell.exe -NoProfile -ExecutionPolicy Bypass \
+        -File "$ROOT/tools/app_icon_probe.ps1" 2>&1)"; ic_rc=$?
+if [ "$ic_rc" -eq 2 ]; then
+    printf '  \033[33mnote\033[0m  %s\n' "SKIP: $(printf '%s\n' "$ic" | sed -n '1p')"
+else
+    while IFS= read -r line; do
+        case "$line" in
+            'OK   '*) ok "${line#OK   }" ;;
+            'FAIL '*) bad "${line#FAIL }" ;;
+            'note '*) printf '  \033[33mnote\033[0m  %s\n' "${line#note }" ;;
+        esac
+    done <<< "$ic"
+    got=$(printf '%s\n' "$ic" | sed -n 's/^ICON PROBE pass=\([0-9]*\) fail=\([0-9]*\).*/\1 \2/p' | head -1)
+    if [ -z "$got" ]; then
+        bad "the probe printed no ICON PROBE verdict: section 25 cannot be judged"
+    else
+        read -r p f <<< "$got"
+        if [ "${f:-x}" != 0 ]; then
+            bad "icon probe verdict says fail=$f (exit $ic_rc)"
+        elif [ "${p:-0}" -lt 6 ]; then
+            bad "icon probe checked only $p claims: the .ico, the exe and the live window are 6"
+        else
+            printf '  \033[33mnote\033[0m  %s\n' "icon probe verdict: pass=$p fail=0 (exit $ic_rc)"
+        fi
+    fi
+    # The positive control: the same probe against a stock Windows exe must
+    # catch it. Without this the green would also mean "the census is blind".
+    windir="${SYSTEMROOT:-C:\\Windows}"
+    ctrl="$(powershell.exe -NoProfile -ExecutionPolicy Bypass \
+              -File "$ROOT/tools/app_icon_probe.ps1" \
+              -Exe "$windir/System32/notepad.exe" 2>&1)"; ctrl_rc=$?
+    verdict=$(printf '%s\n' "$ctrl" | grep -m1 'ICON PROBE pass=')
+    if [ "$ctrl_rc" -ne 0 ]; then
+        ok "[control §25] the probe rejects a stock Windows exe ($verdict)"
+    else
+        bad "[control §25] the probe accepted notepad.exe ($verdict): the accent census and the icon handles are not discriminating"
+    fi
+fi
+
+head_ "26. the package is the current build: tools, launcher exe, archive"
+drift="$(bash "$ROOT/tools/pkg_tools_drift.sh" 2>&1)"; drift_rc=$?
+if [ "$drift_rc" -eq 2 ]; then
+    printf '  \033[33mnote\033[0m  %s\n' "SKIP: $(printf '%s\n' "$drift" | sed -n '1p')"
+else
+    while IFS= read -r line; do
+        case "$line" in
+            'FAIL '*) bad "${line#FAIL }" ;;
+            'OK '*)   ok "${line#OK }" ;;
+            'note '*) printf '  \033[33mnote\033[0m  %s\n' "${line#note }" ;;
+        esac
+    done <<< "$drift"
+    if [ "$drift_rc" -ne 0 ] && [ -z "$(printf '%s\n' "$drift" | grep '^FAIL ')" ]; then
+        bad "the package freshness check exited $drift_rc without a finding"
+    fi
+fi
+
 printf '\n\033[1m%s\033[0m\n' "summary"
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

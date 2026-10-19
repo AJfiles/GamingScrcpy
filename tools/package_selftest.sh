@@ -66,6 +66,12 @@ run "auto-rescan probe"                       powershell -NoProfile -ExecutionPo
 run "profiles valid"                          "$EXE" --validate-profiles
 run "shortcut table valid"                    "$EXE" --validate-shortcuts
 run_must_fail "shortcut duplicate fixture"    "$EXE" --validate-shortcuts "--shortcuts-file=tools/fixtures/shortcuts_duplicate.json"
+# The brand icon, checked on the exe the user actually unzips: the .ico comes
+# from the repo (the package ships no sources), the two runtime arms read the
+# shipped binary and its live window.
+run "shipped exe carries the brand icon" \
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$ROOT/tools/app_icon_probe.ps1" \
+        -Exe "$(cygpath -w "$PWD/launcher/GamingScrcpyLauncher.exe")"
 
 echo
 if [ "$fails" -eq 0 ]; then

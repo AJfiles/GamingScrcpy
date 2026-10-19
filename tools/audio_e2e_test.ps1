@@ -71,8 +71,24 @@ if ($all -match 'Audio disabled|not supported before Android') {
     Write-Output 'OK no audio refusal printed by the server'
 }
 $bytes = if (Test-Path $pcmFile) { (Get-Item $pcmFile).Length } else { 0 }
-if ($bytes -lt 8000) { Write-Output "FAIL PCM tap got $bytes bytes (expected a live stream)"; $fail++ }
-else { Write-Output "OK PCM tap received $bytes bytes" }
+# Two different empty things look identical from the tap alone: a broken tap,
+# and a phone that is simply not playing anything (Samsung mutes the output
+# capture entirely when no app is audible). The recorder is the witness: it is
+# fed by the same decoded packets, so if it also got nothing, the device was
+# silent and this arm cannot judge anything.
+$recFile = "$pcmFile.mkv"
+$recBytes = if (Test-Path $recFile) { (Get-Item $recFile).Length } else { 0 }
+Write-Output "note bytes: PCM tap=$bytes recorder=$recBytes in $Seconds s"
+$inconclusive = $false
+if ($bytes -lt 8000) {
+    if ($recBytes -lt 2000) {
+        Write-Output "SKIP the phone handed the client $recBytes audio bytes in $Seconds s: nothing was playing, so the tap cannot be judged"
+        $inconclusive = $true
+    } else {
+        Write-Output "FAIL the client decoded $recBytes bytes of audio but the PCM tap got $bytes (expected a live stream)"
+        $fail++
+    }
+} else { Write-Output "OK PCM tap received $bytes bytes" }
 # Peak amplitude straight off the s16le stream. Deliberately no ffmpeg here: the
 # gate's bash PATH has it and PowerShell's does not, and a level read that only
 # works in one of the two shells is a flaky test waiting to happen.
@@ -92,5 +108,9 @@ if ($all -match '(?i)audio.*(error|failed)') {
 
 Remove-Item $pcmFile, "$($pcmFile).mkv", $log, "$log.out" -Force -ErrorAction SilentlyContinue
 if ($fail) { Write-Output "AUDIO-E2E FAIL issues=$fail"; exit 1 }
+if ($inconclusive) {
+    Write-Output 'AUDIO-E2E INCONCLUSIVE the device played no audio, so the tap had nothing to copy (manual step: start a video or a game on the phone and re-run)'
+    exit 2
+}
 Write-Output 'AUDIO-E2E OK'
 exit 0

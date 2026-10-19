@@ -113,6 +113,19 @@ that into the log instead of starting a session the device cannot serve — seen
 a moto g(7) power (Android 9, SDK 28), where the same profile with h264 mirrors
 normally and AV1 kills the server before a window appears.
 
+**The one thing that is written to the phone.** Nothing in this project installs
+an app, changes a setting or pushes a file to the device (see "The read-only rule"
+in §7). The single exception is scrcpy's own: at the start of every session
+`scrcpy.exe` copies its `scrcpy-server.jar` to `/data/local/tmp/` and runs it with
+`app_process`. That is upstream behaviour, not a project write — the same binary
+does it for every user, the file is overwritten by the next session and the
+process ends when the session closes. It is a different thing from an
+`adb push`/`adb install` issued by a launcher button or a test script, which the
+blacklist in gate section 14 forbids and actively scans for. Every ADB command a
+harness of this repo runs is appended to `out/dev/adb_audit.log`; scrcpy's jar
+copy is done inside the binary and therefore appears in the session log, not in
+the audit log.
+
 All three `--render-driver` backends are validated on this host without a phone:
 `bash tools/render_driver_test.sh` runs the full presentation path (low-latency
 hint, borderless fullscreen, window filter, OSD, frame bridge) through
@@ -633,6 +646,9 @@ tool in this project writes to it: nothing installs or pushes files, nothing
 changes a system setting, resolution, DPI or the ADB transport. Only
 `adb devices`, `getprop`, read-only `dumpsys`, and whatever scrcpy itself does by
 design (video/audio streaming, input injection, its own screen-on/off) are used.
+The one file that ever lands on the device is scrcpy's own `scrcpy-server.jar` in
+`/data/local/tmp`, copied by `scrcpy.exe` at each session start; that is upstream
+behaviour and is explained in §3.
 Gate section 14 greps `tools/`, `launcher/`, `scripts/` and this fork's own
 diff against upstream for that blacklist and fails on any hit, with a fixture
 (`tools/fixtures/device_write_adb_install.sh`) that it must *detect* so a broken
@@ -780,6 +796,14 @@ FFmpeg-based consumers.
   switched off (Settings → Accessibility → Visual effects) the launcher zeros
   them and the filter panel skips its 120 ms open fade, so the choice is yours,
   not the app's. Gate sections 23 and 24 keep both in line.
+* **App icon** — `GamingScrcpyLauncher.exe` carries its own brand image: a
+  rounded #0E0F13 tile with a #4FA3FF play mark, packed as a multi-resolution
+  `.ico` (16 to 256 px) and wired through `ApplicationIcon` in the project. Gate
+  section 25 reads the icon back from the built exe and from the live window
+  (title bar and taskbar handles), so "the exe has an icon" is a check, not an
+  impression. If Explorer still shows the generic page right after an update,
+  that is the Windows icon cache holding the old image for that path: it clears
+  with `ie4uinit.exe -show` or by copying the folder somewhere else.
 * **Shortcut list** — **ATAJOS** on the Quick tab opens the runtime shortcuts as
   a table instead of a wall of text: a keycap-styled monospaced combination
   (`Super/Alt+F1`, wide enough for `Super+Alt+F12`), a short action, and a grey
@@ -981,3 +1005,23 @@ idle device). Gate §22 (`tools/stall_test.sh`) keeps all of that honest: the
 filter panel must not cost the mirror its first frame, a session shorter than its
 stall timeout must end by itself saying why, and `--no-playback` recordings —
 which never paint by design — must never be watched.
+
+**If only AV1 misbehaves, it is usually the PC's decoder, not the phone.** The
+matrix above was run against a Galaxy S23 Ultra (Android 14) on this host and
+`--video-codec=av1` printed:
+
+```
+ERROR: [FFmpeg] Your platform doesn't support hardware accelerated AV1 decoding.
+WARN: Decoder 'video': hardware decoding failed (Function not implemented), falling back to software decoding
+```
+
+The session kept presenting frames on the software decoder instead of going
+grey, so an AV1-only complaint is a GPU capability question: keep
+`--video-codec=h265` (or `h264` for the lowest latency) unless you know the
+graphics card decodes AV1. Two more things make a device measurement meaningless
+rather than broken, and both are worth checking before blaming a profile: a
+locked or frozen phone panel presents almost no new frames (so `fps≈0` in the
+telemetry is the phone sitting still), and a phone playing nothing hands the
+client no audio at all, which is why the audio checks report *nothing was
+playing* instead of passing or failing.
+
