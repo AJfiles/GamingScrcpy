@@ -3968,6 +3968,55 @@ to `Win32_ProcessStartTrace` instead of polling WMI), §25 `accent pixels:
 app.ico=10 exe=78 at 32x32`, §26 `37 packaged files, every one byte-identical to
 tools/`.
 
+### 5.1b5. v4 §7 — `--game-borderless-fullscreen` still says ON on a captioned window
+
+Measured on the S23 Ultra (`<dev-id-1>`) with the packaged client, one 12 s
+session, the Win32 state read out of the live window by
+`tools/window_style_probe.ps1` (host display work area `0,0 1366x768`):
+
+```
+$ dist/GamingScrcpy/scrcpy/scrcpy.exe --game-borderless-fullscreen --no-audio --time-limit=12
+INFO: borderless: requested 1366x768, SDL reports 1366x768 flags=0x2038
+INFO: Borderless fullscreen on (1366x768)
+INFO: borderless: after first frame 313x671 flags=0x2230
+
+RESULT window hwnd=75433430 style=0x96cf0000 exstyle=0x00000100
+RESULT flags caption=1 thickframe=1 popup=1 topmost=0
+RESULT rect 313x671+526+48 workarea=1366x768+0+0
+```
+
+The client's own log says the mode is on, and the window Windows actually shows
+has a caption, a thick frame, and the size of the video content rather than the
+display. `313x671` is the phone's portrait aspect (`2316x1080` → 2.144), so this
+is upstream's frame-driven "fit the window to the content" pass rebuilding the
+window after the fork's request. It is the same class as every other claim here
+that a log line proves code ran but not the outcome: the assertion has to read
+`GWL_STYLE` and `GetWindowRect`, which is what makes this reproducible rather
+than a rumour.
+
+An attempt was measured, not assumed, and it failed. Adding
+`borderless_reassert()` to the gaming event watch — on
+`SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED` / `WINDOW_MOVED`, with a re-entrancy flag,
+skipping when the geometry already matches — was built into `build-usb` and run
+through the same probe:
+
+```
+RESULT window style=0x96cf0000  flags caption=1 thickframe=1
+RESULT rect 358x768+0+0 workarea=1366x768+0+0
+```
+
+The origin and the height did move to the display (`+0+0`, 768 px) but the width
+stayed at the content width (358, again the 2.145 portrait aspect) and the
+caption is still there, so a resize-after-the-resize is not the fix: something
+applies the content geometry after the event watch runs, and it re-creates the
+frame. That change was therefore **reverted** (`app/src/gaming.c`,
+`app/src/gaming.h` restored from the fork clone, `ninja` re-run and the rebuilt
+`scrcpy.exe` / `gamingdemo.exe` copied back into `dist/GamingScrcpy/scrcpy/`), so
+no half-tested binary ships. Task #20 stays open with this repro, and the next
+attempt should start from whoever resizes last after the first frame — either
+`sc_screen_apply_frame`'s geometry pass or SDL's own frame recreation — rather
+than re-asserting from the outside again.
+
 
 ## 6. What could NOT be validated here, and why
 

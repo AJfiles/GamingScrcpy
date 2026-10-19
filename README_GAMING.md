@@ -464,6 +464,13 @@ really is set) with a normal window, or `--fullscreen` for upstream's exclusive
 fullscreen. The Super+F2 toggle runs the same code and was not measured in this
 session, so treat it as "try it and look" rather than a workaround.
 
+Re-measured on the S23 Ultra (`BUILD_REPORT.md` §5.1b5): same result — the client
+logs `Borderless fullscreen on (1366x768)` and the live window answers
+`caption=1` at the content size (`313x671`, the phone's portrait aspect). An
+attempt to re-assert the geometry from the resize event was built and measured
+too: the window moved to `358x768+0+0` and kept its caption, so that change was
+reverted rather than shipped.
+
 ## 7. Validate it on your hardware
 
 Some of this has now been run against a real device (Lenovo TB-9707F, SM8550,
