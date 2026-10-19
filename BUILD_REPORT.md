@@ -3350,7 +3350,10 @@ work measured 126,506,718 bytes, the one that ships with §4 closed measures
 measures 126,542,648 and the one that carries the rewritten overlay arm
 (§5.1b4) measures 126,545,574. (The copy of this report *inside* the archive
 can only ever name the previous figure — it is packed into the file whose size
-it quotes.) The packaged self-test re-run on the extraction of the §5.1b3
+it quotes.) Treat every number in that chain as a per-step snapshot and read the
+delivered size off the disk instead: a report cannot contain the size of the
+archive that contains it, so the only stable statement is
+`stat -c '%s' dist/GamingScrcpy-win64-fork.zip`. The packaged self-test re-run on the extraction of the §5.1b3
 archive; its `paired p99` line is the instrument as it stood *then*, and
 §5.1b4 replaces that arm, so read the §5.1b4 re-run as the current one:
 
