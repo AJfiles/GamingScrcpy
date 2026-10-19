@@ -464,12 +464,17 @@ really is set) with a normal window, or `--fullscreen` for upstream's exclusive
 fullscreen. The Super+F2 toggle runs the same code and was not measured in this
 session, so treat it as "try it and look" rather than a workaround.
 
-Re-measured on the S23 Ultra (`BUILD_REPORT.md` §5.1b5): same result — the client
-logs `Borderless fullscreen on (1366x768)` and the live window answers
-`caption=1` at the content size (`313x671`, the phone's portrait aspect). An
-attempt to re-assert the geometry from the resize event was built and measured
-too: the window moved to `358x768+0+0` and kept its caption, so that change was
-reverted rather than shipped.
+Re-measured on the S23 Ultra with a control arm (`tools/borderless_probe.ps1`,
+BUILD_REPORT §5.1b5), which corrected the first reading of this defect: the bit
+the flag actually changes is `WS_POPUP` — with the flag the window is a popup,
+without it it is not — while `WS_CAPTION` and `WS_THICKFRAME` are set in both
+arms and say nothing about the flag. So the *borderless* half does reach the
+window; what is lost is the *fullscreen* half: the flag arm measures `313x671`
+inside a `1366x768` work area. An attempt to re-assert the geometry from the
+window-resize event was built and measured too: the window moved to
+`358x768+0+0`, so the origin and the height reached the display but the width
+stayed at the content width, and that change was reverted rather than shipped.
+Until this is fixed, use `--fullscreen` for upstream's fullscreen path.
 
 ## 7. Validate it on your hardware
 
@@ -1003,6 +1008,11 @@ scrcpy.exe --video-codec=av1  --game-telemetry-log
 scrcpy.exe --render-driver=opengl --game-telemetry-log
 scrcpy.exe --render-driver=vulkan --game-telemetry-log
 ```
+
+To see the decoder/renderer's own debug lines, add `-V debug` (or
+`--verbosity=debug`). There is no `--log-level` in this build: `scrcpy.exe
+--log-level=debug --version` answers `unknown option -- log-level=debug` and
+exits 1, so don't waste a troubleshooting run on it.
 
 `--game-telemetry-log` prints one line per second (`INFO: telemetry: fps=…`).
 No lines at all means no frame was ever presented, which is the grey screen;

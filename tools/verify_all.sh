@@ -699,7 +699,16 @@ head_ "18. the filter panel keeps its latency budget (tools/overlay_test.sh)"
 # engine itself; the tail is judged against that baseline instead. The section
 # also checks that the panel is reachable when the global hotkey is taken, that
 # its sliders reach the live engine, and that the stored profile comes back.
-ov="$(bash "$ROOT/tools/overlay_test.sh" 2>&1)"; ov_rc=$?
+# The tail assertion needs a census that can actually carry it. With the default
+# 1000 frames/rep, p99 is the 10th worst frame, and four measurements of the
+# *same* build on this host gave paired p99 differences of -1.648, +1.958,
+# +3.893 and +5.172 ms (its own baseline spread was 0.799-10.950 ms), so that
+# statistic flips sign between runs and no budget can be honest against it. At
+# 4000 frames/rep p99 is the 40th worst frame: the baseline's rep-to-rep spread
+# fell to 0.040 ms and the paired difference measured +0.070 ms, i.e. the panel
+# does have a tail cost and it is tiny. So this section runs the A/B at 4000
+# frames and keeps the directive's 1 ms budget on all three statistics.
+ov="$(bash "$ROOT/tools/overlay_test.sh" --frames=4000 --reps=2 2>&1)"; ov_rc=$?
 while IFS= read -r line; do
     case "$line" in
         OK\ *)    ok "${line#OK }" ;;

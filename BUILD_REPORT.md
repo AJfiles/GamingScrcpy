@@ -3971,7 +3971,7 @@ to `Win32_ProcessStartTrace` instead of polling WMI), §25 `accent pixels:
 app.ico=10 exe=78 at 32x32`, §26 `37 packaged files, every one byte-identical to
 tools/`.
 
-### 5.1b5. v4 §7 — `--game-borderless-fullscreen` still says ON on a captioned window
+### 5.1b5. v4 §7 — `--game-borderless-fullscreen` goes borderless but not fullscreen
 
 Measured on the S23 Ultra (`<dev-id-1>`) with the packaged client, one 12 s
 session, the Win32 state read out of the live window by
@@ -3989,13 +3989,74 @@ RESULT rect 313x671+526+48 workarea=1366x768+0+0
 ```
 
 The client's own log says the mode is on, and the window Windows actually shows
-has a caption, a thick frame, and the size of the video content rather than the
-display. `313x671` is the phone's portrait aspect (`2316x1080` → 2.144), so this
-is upstream's frame-driven "fit the window to the content" pass rebuilding the
-window after the fork's request. It is the same class as every other claim here
-that a log line proves code ran but not the outcome: the assertion has to read
-`GWL_STYLE` and `GetWindowRect`, which is what makes this reproducible rather
-than a rumour.
+is still sized to the video content rather than the display. `313x671` is the
+phone's portrait aspect (`2316x1080` → 2.144), so this is upstream's frame-driven
+"fit the window to the content" pass rebuilding the window after the fork's
+request. It is the same class as every other claim here that a log line proves
+code ran but not the outcome: the assertion has to read `GWL_STYLE` and
+`GetWindowRect`, which is what makes this reproducible rather than a rumour.
+
+One part of that first reading was wrong, and a control is what fixed it. The
+same harness run twice, one arm with the flag and one without it:
+
+```
+work area = 1366x768+0+0
+note  with flag : style=0x96cf0000  caption=1 thickframe=1 popup=1  rect 313x671+526+48
+note  control   : style=0x16cf0000  caption=1 thickframe=1 popup=0  rect 329x710+518+17
+note  borderless: the flag arm is a popup window and the control is not
+FAIL  the flag arm is 313x671, not the work area 1366x768
+BORDERLESS FAIL issues=1
+```
+
+`WS_CAPTION` and `WS_THICKFRAME` are set in **both** arms, so they say nothing
+about the flag; the bit that differs is `WS_POPUP`, and it is set only with the
+flag. So the borderless half of `--game-borderless-fullscreen` does reach the
+window — SDL's borderless style is on — and what the flag does not deliver is
+the *fullscreen* half: neither arm covers the work area. That narrows the defect
+from "the mode is a lie" to "upstream's fit-to-content resize wins the geometry",
+and it is the reason this section now has a shipped harness for it:
+`tools/borderless_probe.ps1` measures both arms, refuses to conclude anything
+unless the control differs from the flag arm, and was driven through both of its
+non-green branches — `BORDERLESS SKIP … exit 2` with no device attached, and the
+`FAIL` above with the S23 Ultra attached.
+
+The harness ships, and shipping it is what made §26 useful: the first gate run of
+this step (`out/dev/verify_v4_step9.log`) ended `213 passed, 2 failed`, and both
+failures were §26 reporting the new tool as unshipped —
+
+```
+FAIL  tools/ has harnesses the package does not ship: borderless_probe.ps1
+FAIL  the archive is older than dist/GamingScrcpy/scrcpy/gamingdemo.exe: dist/ changed after the last repack
+```
+
+— i.e. the check caught the exact state it was written for (a harness tested in
+`tools/` but absent from the deliverable). After copying `tools/borderless_probe.ps1`
+and both docs into `dist/GamingScrcpy/` and repacking:
+
+```
+$ bash tools/pkg_tools_drift.sh
+OK 38 packaged files, every one byte-identical to tools/
+OK shipped theme inputs (App.xaml Loc.cs MainWindow.xaml ) are the launcher's own
+OK packaged launcher is not older than any launcher source or the app icon
+OK archive is not older than any binary, tool or theme file in dist/GamingScrcpy
+PKGDRIFT OK
+
+$ bash tools/package_selftest.sh
+ICON PROBE pass=8 fail=0
+PKGSELFTEST OK (164 files, 3 dirs)     # was 163: the new harness is inside the archive
+
+$ cd out/pkg_selftest && powershell -File ./tools/borderless_probe.ps1
+BORDERLESS SKIP no device attached (the flag needs a real stream to resize against)
+packaged-probe exit=2
+```
+
+That last arm is the one the project memory asks for every new script: a harness
+that resolves its own binary paths has to be run *from the extraction*, because
+that is where a build-tree-only path collapses. Here it degraded correctly to
+SKIP/exit 2 rather than crashing or printing a false OK, and the delivered
+archive is 126,550,706 bytes (`stat -c '%s' dist/GamingScrcpy-win64-fork.zip`
+is the only stable statement, as §5.1b4 established).
+
 
 An attempt was measured, not assumed, and it failed. Adding
 `borderless_reassert()` to the gaming event watch — on
@@ -4009,17 +4070,96 @@ RESULT rect 358x768+0+0 workarea=1366x768+0+0
 ```
 
 The origin and the height did move to the display (`+0+0`, 768 px) but the width
-stayed at the content width (358, again the 2.145 portrait aspect) and the
-caption is still there, so a resize-after-the-resize is not the fix: something
-applies the content geometry after the event watch runs, and it re-creates the
-frame. That change was therefore **reverted** (`app/src/gaming.c`,
+stayed at the content width (358, again the 2.145 portrait aspect), so a
+resize-after-the-resize is not the fix: something applies the content geometry
+after the event watch runs. That change was therefore **reverted** (`app/src/gaming.c`,
 `app/src/gaming.h` restored from the fork clone, `ninja` re-run and the rebuilt
 `scrcpy.exe` / `gamingdemo.exe` copied back into `dist/GamingScrcpy/scrcpy/`), so
-no half-tested binary ships. Task #20 stays open with this repro, and the next
-attempt should start from whoever resizes last after the first frame — either
-`sc_screen_apply_frame`'s geometry pass or SDL's own frame recreation — rather
-than re-asserting from the outside again.
+no half-tested binary ships. Task #20 stays open.
 
+Reading the candidate paths (source reading, not measurement) removed two wrong
+suspects and left three real ones. `sc_screen_apply_frame`'s geometry pass is
+*already* gated: `screen.c:1084-1091` forces `can_resize = false` when
+`gaming_active && borderless_fullscreen_active`, and `sc_screen_set_orientation`
+(screen.c:983) passes the same condition — those are the "two auto-resize paths
+guarded so far" §5.1r mentioned. What is left unguarded in the same file is:
+
+| path | line | why it still fits the repro |
+|---|---|---|
+| `sc_screen_set_paused` resume refresh | screen.c:1111 | calls `sc_screen_apply_frame(screen, true)` with the resize flag hard-wired to true |
+| `apply_pending_resize` | screen.c:958, called at :1300 and :1312 | runs when the window leaves fullscreen/maximized, re-applying the stored content size |
+| `sc_screen_resize_to_fit` from the input manager | input_manager.c:515, :924 | a shortcut/key path that resizes to content with no gaming gate |
+
+Gate §13 constrains how the fix may be written, and it allows this: the check
+diffs `app/src/screen.c` against the upstream tag and fails only if a changed
+line mentions `compute_content_rect`, `convert_to_screen_coords`,
+`convert_from_screen_coords` or `is_optimal_size`, or if a `+` line assigns to
+`screen->rect` or `rect->x|y|w|h` (verify_all.sh:489-500). Gating a resize call
+site touches neither, so §13 stays green while printing which functions the
+hunks live in.
+
+The next attempt should therefore name the caller before patching it. The
+client's own debug log separates two of those three: the input-manager shortcut
+path goes through `sc_screen_resize_to_fit`, which `LOGD`s `Resized to content
+size: WxH` (screen.c:1180) or `Resized to optimal size: WxH` (screen.c:1204),
+and the fullscreen toggle logs `Requested %s mode` (screen.c:1141). The
+frame/orientation/pending-resize route all funnel through `resize_for_content`
+(screen.c:915-931), which logs **nothing** — so if a `-V debug` run shows the
+geometry changing with no `Resized …` line at all, the silent helper is the
+caller and it needs a temporary `LOGD` of its own to be attributed. One
+correction found while looking for it: this build has no
+`--log-level` (measured: `scrcpy.exe --log-level=debug --version` → `unknown
+option`, exit 1; the option is `-V/--verbosity`, `cli.c:1215-1220`), which also
+matters for directive §1.2f's "el log del servidor (`--log-level=debug`)" step —
+the README §12 troubleshooting now says `-V debug`.
+
+
+### 5.1b6. v4 §7 — gate §18's tail assertion was moved onto a census that can carry it
+
+After §26 went green, the step-9 gate still ended `215 passed, 2 failed` (and
+`214 passed, 2 failed` when re-run with four reps), both times on §18's overlay
+A/B: first `p99 grew 5.172 ms with the panel open (budget 2.435 ms, baseline
+spread 2.435 ms)`, then `p99 grew 1.958 ms (budget 1.000 ms, baseline spread
+0.799 ms)`. The median and p90 lines of those same runs passed every time, so
+the question was whether the panel had become slower or the statistic had become
+useless. Five measurements of the *same build* answer it:
+
+| frames/rep · reps | paired median | paired p90 | paired p99 | baseline's own p90 / p99 spread | verdict |
+|---|---|---|---|---|---|
+| 1000 · 2 (in gate) | 0.018 ms | -0.036 ms | **+5.172 ms** | 0.222 / 2.435 ms | FAIL |
+| 1000 · 4 (standalone) | -0.000 ms | 0.025 ms | **-1.648 ms** | 0.368 / 10.950 ms | OK |
+| 1000 · 4 (in gate) | 0.005 ms | 0.018 ms | **+1.958 ms** | 0.148 / 0.799 ms | FAIL |
+| 4000 · 2 (standalone) | -0.003 ms | 0.043 ms | **+3.893 ms** | 0.064 / 0.817 ms | FAIL |
+| 4000 · 2 (standalone) | -0.009 ms | 0.044 ms | **+0.070 ms** | 0.031 / **0.040 ms** | OK |
+| 4000 · 2 (in gate, final) | 0.006 ms | 0.015 ms | **+0.027 ms** | 0.001 / 0.001 ms | PASS |
+
+The last row is the shipped configuration re-measured inside the full gate:
+`out/dev/verify_v4_step9d.log` ends **`215 passed, 0 failed`**, §18 reads
+`paired p99 difference = 0.027 ms < 1.000 ms (budget = max(1.0, baseline p99
+spread 0.001); only a longer tail fails)`, and §26 reports
+`38 packaged files, every one byte-identical to tools/` with
+`borderless_probe.ps1` among them.
+
+At 1000 frames a p99 is the 10th worst frame of that run, so it is one or two
+host stalls wide: the paired difference ranged over 6.8 ms and **changed sign
+between identical builds**, and the `budget = max(--p99-budget, baseline
+spread)` floor could not rescue it because the floor is itself estimated from
+those same noisy reps (2.435, 0.799 and 10.950 ms in three runs of one build).
+At 4000 frames p99 is the 40th worst frame: the baseline's internal spread fell
+to **0.040 ms**, twenty-five times below the 1 ms budget, and the panel's tail
+cost became a stable, tiny **+0.070 ms** — a measurement instead of a coin flip.
+The 4000-frame row that reads +3.893 ms is the same instrument with one rep still
+catching a stall (its best-of columns read 4.592 vs 4.396 ms), which is why the
+harness keeps printing every raw census as a NOTE rather than hiding behind the
+mean.
+
+So the fix went to the instrument, not to the threshold: `tools/verify_all.sh`
+§18 now runs `overlay_test.sh --frames=4000 --reps=2` and keeps the directive's
+1 ms budget on median, p90 **and** p99. No criterion was dropped and no budget
+was loosened; the reason is checkable by re-running the table above. This is the
+same lesson §5.1b1 learned on the phone side — a percentile is only evidence
+when its own noise is below the effect being tested, and here the effect
+(~0.04 ms) needed four times the samples to become visible at all.
 
 ## 6. What could NOT be validated here, and why
 
