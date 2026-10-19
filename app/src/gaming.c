@@ -996,15 +996,22 @@ set_borderless_fullscreen(struct sc_gaming *g, bool on) {
         if (!SDL_SetWindowBordered(g->window, false)) {
             LOGW("borderless: SDL_SetWindowBordered failed: %s", SDL_GetError());
         }
-        SDL_SetWindowPosition(g->window, g->display_x, g->display_y);
-        SDL_SetWindowSize(g->window, g->display_w, g->display_h);
+        g->borderless_fullscreen_active = true;
+        sc_gaming_apply_borderless_geometry(g);
         int rw = 0, rh = 0;
         SDL_GetWindowSize(g->window, &rw, &rh);
         LOGI("borderless: requested %dx%d, SDL reports %dx%d flags=0x%x",
              g->display_w, g->display_h, rw, rh,
              (unsigned) SDL_GetWindowFlags(g->window));
-        g->borderless_fullscreen_active = true;
-        LOGI("Borderless fullscreen on (%dx%d)", g->display_w, g->display_h);
+        if (rw != g->display_w || rh != g->display_h) {
+            // The promise is a window the size of the display, so say out loud
+            // when the window manager kept a different size.
+            LOGW("borderless: the window is %dx%d, not the display %dx%d",
+                 rw, rh, g->display_w, g->display_h);
+        } else {
+            LOGI("Borderless fullscreen on (%dx%d)", g->display_w,
+                 g->display_h);
+        }
     } else {
         SDL_SetWindowBordered(g->window, true);
         if (g->windowed_size_saved) {
@@ -1014,9 +1021,44 @@ set_borderless_fullscreen(struct sc_gaming *g, bool on) {
                               (int) g->windowed_size.height);
         }
         g->borderless_fullscreen_active = false;
+        if (g->content_aspect > 0.f) {
+            // Back to a normal window: lock it to the video again, since the
+            // letterbox that made the lock unnecessary is gone.
+            SDL_SetWindowAspectRatio(g->window, g->content_aspect,
+                                     g->content_aspect);
+        }
         LOGI("Borderless fullscreen off");
     }
     refresh_window_metrics(g);
+}
+
+void
+sc_gaming_apply_borderless_geometry(struct sc_gaming *g) {
+    if (!g->borderless_fullscreen_active) {
+        return;
+    }
+    // The window belongs to the display and the video is letterboxed into the
+    // content rect, so the aspect lock has to go: with it, SDL kept the
+    // requested height and clamped the width to the video aspect (measured on
+    // an S23 Ultra: 1366x768 requested, 358x768 obtained).
+    SDL_SetWindowAspectRatio(g->window, 0.0f, 0.0f);
+    SDL_SyncWindow(g->window);
+    SDL_SetWindowPosition(g->window, g->display_x, g->display_y);
+    SDL_SetWindowSize(g->window, g->display_w, g->display_h);
+    SDL_SyncWindow(g->window);
+    refresh_window_metrics(g);
+}
+
+void
+sc_gaming_note_content_aspect(struct sc_gaming *g, float aspect) {
+    if (aspect > 0.f) {
+        g->content_aspect = aspect;
+    }
+}
+
+bool
+sc_gaming_borderless_fullscreen_active(const struct sc_gaming *g) {
+    return g->borderless_fullscreen_active;
 }
 
 static bool

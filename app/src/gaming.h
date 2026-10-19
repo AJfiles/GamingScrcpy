@@ -243,6 +243,7 @@ struct sc_gaming {
     // --- window state ---
     bool borderless_fullscreen_active;
     bool borderless_frame_checked; // one-time geometry diagnostic
+    float content_aspect;     // video aspect, to re-lock the window on exit
     bool always_on_top_active;
     struct sc_size windowed_size;
     struct sc_point windowed_pos;
@@ -351,6 +352,18 @@ void
 sc_gaming_toggle_osd(struct sc_gaming *g);
 void
 sc_gaming_toggle_borderless_fullscreen(struct sc_gaming *g);
+// Re-assert the display-sized geometry after upstream has fitted the window to
+// the video content. Does nothing while the mode is off.
+void
+sc_gaming_apply_borderless_geometry(struct sc_gaming *g);
+
+// The aspect ratio the mirror window is normally locked to, remembered so that
+// leaving borderless fullscreen restores it.
+void
+sc_gaming_note_content_aspect(struct sc_gaming *g, float aspect);
+
+bool
+sc_gaming_borderless_fullscreen_active(const struct sc_gaming *g);
 void
 sc_gaming_toggle_touch_visualizer(struct sc_gaming *g);
 void

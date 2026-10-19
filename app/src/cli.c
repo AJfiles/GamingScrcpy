@@ -257,9 +257,8 @@ static const struct sc_option options[] = {
         .text = "Ask for a borderless window covering the monitor work "
                 "area: like a game's borderless mode, but still a normal "
                 "window so OBS Window Capture and Alt+Tab keep working.\n"
-                "KNOWN ISSUE: the first video frame currently resizes the "
-                "window back to the content size, so this does not yet end "
-                "up fullscreen-borderless (see README_GAMING.md).\n"
+                "The video keeps its own aspect and is letterboxed inside "
+                "that window, and touch still maps to the picture.\n"
                 "Toggle at runtime with Super/Alt+F2.",
     },
     {

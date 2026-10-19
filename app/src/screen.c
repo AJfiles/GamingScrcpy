@@ -18,8 +18,19 @@ static void
 set_aspect_ratio(struct sc_screen *screen, struct sc_size content_size) {
     assert(content_size.width && content_size.height);
 
+    float ar = (float) content_size.width / content_size.height;
+    if (screen->gaming_active) {
+        sc_gaming_note_content_aspect(&screen->gaming, ar);
+        if (sc_gaming_borderless_fullscreen_active(&screen->gaming)) {
+            // The window covers the display and the video is letterboxed into
+            // the content rect, so locking it to the video aspect would clamp
+            // it back to a content-sized window.
+            SDL_SetWindowAspectRatio(screen->window, 0.0f, 0.0f);
+            return;
+        }
+    }
+
     if (screen->window_aspect_ratio_lock) {
-        float ar = (float) content_size.width / content_size.height;
         bool ok = SDL_SetWindowAspectRatio(screen->window, ar, ar);
         if (!ok) {
             LOGW("Could not set window aspect ratio: %s", SDL_GetError());
@@ -826,6 +837,12 @@ sc_screen_show_initial_window(struct sc_screen *screen) {
     sc_sdl_set_window_size(screen->window, window_size);
     sc_sdl_set_window_position(screen->window, position);
 
+    if (screen->gaming_active) {
+        // The initial size above is fitted to the video content, which undoes a
+        // borderless fullscreen window sized to the display.
+        sc_gaming_apply_borderless_geometry(&screen->gaming);
+    }
+
     if (screen->req.fullscreen) {
         sc_screen_toggle_fullscreen(screen);
     }
@@ -915,6 +932,15 @@ static void
 resize_for_content(struct sc_screen *screen, struct sc_size old_content_size,
                    struct sc_size new_content_size) {
     assert(screen->video);
+
+    if (screen->gaming_active
+            && sc_gaming_borderless_fullscreen_active(&screen->gaming)) {
+        // Rotating the device must not shrink a borderless window back to the
+        // video size: the new aspect is absorbed by the letterbox instead.
+        set_aspect_ratio(screen, new_content_size);
+        sc_gaming_apply_borderless_geometry(&screen->gaming);
+        return;
+    }
 
     struct sc_size target_size = new_content_size;
     if (!screen->flex_display) {
