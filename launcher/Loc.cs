@@ -83,7 +83,7 @@ namespace GamingScrcpyLauncher
             new[] { "ScActPower", "Bot\u00f3n de encendido", "Power button" },
             new[] { "ScDescPower", "equivale a pulsarlo", "same as pressing it" },
             new[] { "ScActBorderless", "Pantalla completa sin bordes", "Borderless fullscreen" },
-            new[] { "ScDescBorderless", "ocupa el \u00e1rea de trabajo; lee README \u00a77 si al arrancar no lo hace", "fills the work area; read README \u00a77 if startup does not" },
+            new[] { "ScDescBorderless", "ocupa el \u00e1rea de trabajo; la imagen se centra con bandas si el tel\u00e9fono tiene otra proporci\u00f3n", "fills the work area; the picture is letterboxed if the phone has a different aspect" },
             new[] { "ScActOnTop", "Siempre encima", "Always on top" },
             new[] { "ScDescOnTop", "el espejo queda sobre tus aplicaciones", "the mirror stays over your apps" },
             new[] { "ScActFullscreen", "Pantalla completa", "Fullscreen" },

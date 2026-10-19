@@ -40,7 +40,7 @@ which failed there (`FAIL only 1 adb children in 24s`) for the instrument reason
 §5.1ap, so this archive carries one check that has to be fixed before it is claimed
 green |
 | Regression suite | `tools\verify_all.sh` | **151 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr5.log` — 145 of those lines were already green at §5.1al and the 6 new ones are section 20, the theme audit: single accent, radius range, no symbol glyphs, a keyboard-focus trigger in the templates, 15 measured contrast pairs and its broken-palette positive control; §5.1am); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
-| Known defect | `--game-borderless-fullscreen` | The window does not end up borderless or work-area sized at startup: measured `style=0x96cf0000` (caption bits still set) at `1270x592` on a `1366x768` desktop, because the first frame's resize overwrites the state that `set_borderless_fullscreen()` applies. `--always-on-top` and the live OSD were verified working in the same probe; `--fullscreen` (upstream) is unaffected. Reproduce with `tools/window_style_probe.ps1` (§5.1r, task #20) |
+| Fixed defect (v4) | `--game-borderless-fullscreen` | Was: the window did not end up work-area sized at startup (`313x671` on a `1366x768` desktop). Two upstream owners found by measurement — `sc_screen_show_initial_window()` fits the window to the video, then the aspect-ratio lock clamps the width to the video aspect (`358x768`). Now re-asserted and unlocked while the mode is on: the flag arm measures `1366x768+0+0`, `popup=1`, against a `329x710`, `popup=0` control (`tools/borderless_probe.ps1`, §5.1b5 → §5.1b7). The picture is letterboxed; touch mapping through that letterbox still needs the owner's eyes (README §7 item 4). |
 | Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
 
 ## 2. Toolchain actually used
@@ -2638,7 +2638,7 @@ half-truth. Cost is in working minutes for someone who knows this tree.
 | Preset "Presentation mode" (borderless + always-on-top + OSD mínimo + filtros, un click) | **reachable but not one click.** Every ingredient is a config field, and the 11 session profiles carry combinations of them. | ~40 min: one button that sets four fields and starts. Real value for the streaming use case, no new risk (the same flags are already validated by `--validate-profiles`). **Candidate for the next PR.** |
 | Auto-detección cada 3 s en foreground | **shipped in PR 7 (§5.1ap).** A `DispatcherTimer` gated on `IsActive` and on no live session re-runs the same read-only scan, and repaints only when a `serial:state` signature differs from the last one. `tools/autoscan_probe.ps1` counts its `adb.exe` children and gate section 21 pins the result. | estimated ~30 min, and that held. The cost is a periodic `adb devices`, which the read-only rules already allow and gate §14 already pins. |
 | Última config + botón "Relaunch" | **half shipped.** The settings are persisted under `%APPDATA%\GamingScrcpy` and reloaded at start — the window came back in the language and with the device selected in the previous session — so the last configuration *is* the startup configuration. There is no "relaunch the session I just closed" button. | ~1 h for a button that re-arms the last device and profile. Moderate value, small surface. **Backlog.** |
-| Cerrar el defecto #20 (borderless al arranque) | **open, and narrowed.** `--game-borderless-fullscreen` now logs `Borderless fullscreen on (WxH)` and `tools/window_style_probe.ps1` proves the caption bits are cleared, but the first frame still resizes the window back to the content size afterwards. | ~3 h in `screen.c`/`scrcpy.c` ordering, in the file the upstream-diff invariant (§13) watches most closely. Deferred deliberately: it is the one remaining change that can break the "never alter what the device renders" rule. |
+| Cerrar el defecto #20 (borderless al arranque) | **closed in v4 (§5.1b7).** Two upstream owners, both found by measurement: the initial fit-to-content size and the window aspect lock. The flag arm now measures `1366x768+0+0` `popup=1` against a `329x710` `popup=0` control. | Was ~3 h in `screen.c`, the file the upstream-diff invariant (§13) watches most closely; §13 stayed green because the change only reads the gaming state and never writes the content rect. |
 | Customización de hotkeys desde la UI (persistente) | **shipped.** `RefreshKeymaps()` feeds a keymap editor whose result lands in `cfg.ShortcutMods` and is emitted as `--shortcut-mod=…`, persisted in the same JSON. The filter panel's own `Super+Alt+F` became editable in this PR. | nothing left to build. |
 
 Two of the seven were already shipped when this table was written (the hotkey
@@ -4057,6 +4057,13 @@ SKIP/exit 2 rather than crashing or printing a false OK, and the delivered
 archive is 126,550,706 bytes (`stat -c '%s' dist/GamingScrcpy-win64-fork.zip`
 is the only stable statement, as §5.1b4 established).
 
+**Corrected in §5.1b7:** that "degraded correctly" conclusion only covered the
+branch it exercised. No device was attached when it ran, so the probe stopped at
+the adb check and never reached its `$Exe` default — which is a repo-only path
+that does not exist in an extraction. With the adb bug fixed and the device
+attached, the same packaged arm crashed in `Start-Process`. The probe now
+resolves `scrcpy.exe` through a candidate list and its packaged run passes.
+
 
 An attempt was measured, not assumed, and it failed. Adding
 `borderless_reassert()` to the gaming event watch — on
@@ -4160,6 +4167,131 @@ was loosened; the reason is checkable by re-running the table above. This is the
 same lesson §5.1b1 learned on the phone side — a percentile is only evidence
 when its own noise is below the effect being tested, and here the effect
 (~0.04 ms) needed four times the samples to become visible at all.
+
+### 5.1b7. v4 §7 step 10 — `--game-borderless-fullscreen` now covers the display
+
+§5.1b5 left the defect open with two candidate resizers and a harness that could
+measure it. With the S23 Ultra connected again, the fix went in two steps and each
+one was measured by `tools/borderless_probe.ps1` (both arms, every time):
+
+| build | flag arm (window Windows really holds) | control arm | verdict |
+|---|---|---|---|
+| shipped in §5.1b5 | `313x671+?` popup=1 | `329x710` popup=0 | FAIL, 313x671 ≠ work area |
+| + re-assert display geometry in `sc_screen_show_initial_window()` | `358x768+0+0` popup=1 | `329x710` popup=0 | FAIL, origin and height right, width still the video's |
+| + unlock the window aspect ratio while the mode is on | `1366x768+0+0` popup=1 | `329x710` popup=0 | **BORDERLESS OK** |
+
+The second row is why the first attempt was not enough: `set_aspect_ratio()`
+(screen.c:23) calls `SDL_SetWindowAspectRatio(window, ar, ar)`, and SDL keeps the
+dimension it can satisfy and clamps the other one to the video aspect — `768 ×
+1080/2316 = 358`. So the flag had two upstream owners: the initial fit-to-content
+size, and the aspect lock that survives it. Both are now re-asserted by
+`sc_gaming_apply_borderless_geometry()` (gaming.c), which unlocks the aspect
+(`SDL_SetWindowAspectRatio(w, 0.0f, 0.0f)` — "no limit", per SDL3), syncs, then
+positions and sizes the window to the display bounds. `set_aspect_ratio()` became
+borderless-aware so a rotation cannot re-lock and re-clamp the window, and it
+remembers the video aspect in `g->content_aspect` so leaving the mode (Super+F2)
+restores the normal, aspect-locked window. `resize_for_content()` — the silent
+helper blamed in §5.1b5 — now re-asserts the display geometry instead of fitting
+the window to the content.
+
+Gate §13 watched this change and still passes: it diffs `app/src/screen.c` against
+the upstream tag and fails on any line touching `compute_content_rect`, the two
+pointer conversions or `is_optimal_size`, or on any line writing `screen->rect` /
+`rect->x|y|w|h`. The new lines only *read* the gaming state and call the two
+fork-side helpers, so the pointer mapping path is untouched by construction. The
+fork's own overlay mapping (`pointer_to_content()`, gaming.c) already converts
+through `g->content_rect`, so the touch visualizer and the OSD follow the
+letterboxed picture rather than the window.
+
+Two honesty notes, both in the shipped text:
+
+* `--help` used to carry a "KNOWN ISSUE: the first video frame … does not yet end
+  up fullscreen-borderless" paragraph, and the launcher's shortcut table told the
+  user to "read README §7 if startup does not". With the flag measured working,
+  both now say what the window actually does instead (the picture is letterboxed
+  when the phone's aspect differs from the monitor's). Leaving the caveat in place
+  would have been the same dishonest-control mistake in the other direction.
+* What is *not* yet measured is touch alignment through that letterbox on a real
+  game: the mapping code is proven unchanged by §13, but the "tap in the corners
+  and watch the phone react" check needs the owner's hands (README §7 item 4).
+
+`tools/borderless_probe.ps1` also had a false negative of its own: it enumerated
+devices only when `-Adb` was passed, and adb is not on PATH in this project, so it
+printed `BORDERLESS SKIP no device attached` while `<dev-id-1> device` was
+plugged in. It now resolves the packaged `adb.exe` in both layouts (repo and
+package) before deciding to SKIP, and the SKIP line prints which adb it probed
+with. A harness that cannot see the hardware it is guarding is the same class of
+bug as a gate that reports PASS for a check it never ran.
+
+The gate run that closes this step is `out/dev/verify_v4_step10d.log`:
+**`215 passed, 0 failed`** with the S23 Ultra connected, and the only non-PASS
+line in it is the standing honest SKIP —
+
+```
+16. audio end-to-end on a device that can do it (directive v3 §1.3)
+  SKIP  the phone handed the client 0 audio bytes in 10 s: nothing was playing, so the tap cannot be judged
+```
+
+Section 13 reports `screen.c changes nothing in the mapping path vs v5.0.1` even
+though the diff for this fix lives in that file, because the check is written
+against the lines it forbids (`compute_content_rect`, the two pointer
+conversions, `is_optimal_size`, any write of `screen->rect` or `rect->x|y|w|h`)
+and lists the changed hunks instead: `resize_for_content`,
+`sc_screen_show_initial_window`, and the frame/disconnect helpers are named there
+as changed-but-allowed, which is the honest form of the claim.
+
+Two §26 failures from the run immediately before it are recorded here too,
+because the fix for them is a rule, not a code change: `213 passed, 2 failed`
+came from a stale `dist/GamingScrcpy/tools/theme/Loc.cs` and from the fact that
+this repository has **two** archive copies — `dist/GamingScrcpy-win64-fork.zip`,
+which is the one `tools/pkg_tools_drift.sh` compares against `dist/GamingScrcpy/`,
+and a repo-root `GamingScrcpy-win64-fork.zip` that is not the gate's target. A
+repack that only refreshes the second leaves the checked package older than the
+binaries it contains. Both are now rebuilt and `pkg_tools_drift.sh` exits 0; no
+byte count is quoted here, because this section ships inside the archive whose
+size it would have to state — the chain the `Distributable package` row of the
+summary table at the top of this report describes.
+
+Repacking then exposed two more bugs of the kind §26 cannot see, and both were
+caught only by running the deliverable:
+
+* `Compress-Archive -Path dist\GamingScrcpy` puts everything under a top-level
+  `GamingScrcpy/` folder, while the shipped archive has `launcher/ scrcpy/ tools/`
+  at its root. `tools/package_selftest.sh` failed immediately with
+  `MISSING ./launcher/GamingScrcpyLauncher.exe in the package` and
+  `extracted: 164 files under 1 top-level directories`, while `pkg_tools_drift.sh`
+  stayed green — it compares `tools/` against `dist/GamingScrcpy/tools/`, never
+  against the archive's internal layout. The correct invocation is
+  `-Path "$src\*"`, and the expected extraction is `164 files under 3 top-level
+  directories`, which is what the passing run prints.
+* `tools/borderless_probe.ps1` resolved its `$Exe` only through
+  `..\dist\GamingScrcpy\scrcpy\scrcpy.exe`, a repo-layout path that does not exist
+  in an extraction, so from `out/pkg_selftest` it died inside `Start-Process` with
+  *"El sistema no puede encontrar el archivo especificado"*. §5.1b5 had run this
+  same arm and concluded "it degraded correctly to SKIP/exit 2" — true but
+  worthless, because no device was attached then, so the SKIP happened before the
+  `$Exe` path was ever used. The probe now walks the candidate list
+  (`build-usb` → `dist` → package-local `scrcpy/`) and fails with an explicit
+  `BORDERLESS FAIL no scrcpy.exe found` rather than a PowerShell exception when
+  none of the three exists.
+
+With that fixed, the harness runs against the package the user receives
+(`out/dev/borderless_packaged_step10.log`, exit 0):
+
+```
+$ cd out/pkg_selftest && powershell -File ./tools/borderless_probe.ps1
+work area = 1366x768+0+0
+note  with flag : RESULT window … popup=1 … rect 1366x768+0+0 workarea=1366x768+0+0
+note  control   : RESULT window … popup=0 … rect 1286x631+40+57 workarea=1366x768+0+0
+BORDERLESS OK the flag is the window state: popup, 1366x768 of 1366x768
+```
+
+That is the same verdict as the repo-layout run measured earlier in this step,
+with the packaged `scrcpy.exe` and the packaged `adb.exe`, so the fix and the
+harness that guards it both travel in the ZIP. The lesson to keep is narrower
+than "run it from the extraction": a packaging change must be verified by
+*extracting and executing*, because every age/identity check in §26 reads the
+files on disk and none of them reads the archive's directory structure.
 
 ## 6. What could NOT be validated here, and why
 

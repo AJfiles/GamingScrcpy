@@ -22,14 +22,37 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Exe) {
-    $Exe = Join-Path $here '..\dist\GamingScrcpy\scrcpy\scrcpy.exe'
+    # Same candidate-list rule as the adb lookup below: the repo layout has the
+    # fresh build first, but an extracted package has only scrcpy/ beside tools/,
+    # and a probe that cannot find its binary there is a probe that silently
+    # never runs on the deliverable.
+    foreach ($c in @('..\workspace\scrcpy\build-usb\app\scrcpy.exe',
+                     '..\dist\GamingScrcpy\scrcpy\scrcpy.exe',
+                     '..\scrcpy\scrcpy.exe')) {
+        $p = Join-Path $here $c
+        if (Test-Path $p) { $Exe = $p; break }
+    }
+}
+if (-not (Test-Path $Exe)) {
+    "BORDERLESS FAIL no scrcpy.exe found (pass -Exe; looked in build-usb, dist and the package layout)"
+    exit 1
+}
+if (-not $Adb) {
+    # adb is not on PATH in this project, so an empty default used to make the
+    # probe SKIP while a device was attached. Look for the packaged adb in both
+    # layouts (repo: tools/ beside dist/; package: tools/ beside scrcpy/) and
+    # only give up once neither exists.
+    foreach ($c in @('..\dist\GamingScrcpy\scrcpy\adb.exe', '..\scrcpy\adb.exe')) {
+        $p = Join-Path $here $c
+        if (Test-Path $p) { $Adb = $p; break }
+    }
 }
 $devices = @()
 if ($Adb) {
     $devices = & $Adb devices | Select-Object -Skip 1 | Where-Object { $_ -match '\tdevice$' }
 }
 if ($devices.Count -eq 0) {
-    'BORDERLESS SKIP no device attached (the flag needs a real stream to resize against)'
+    "BORDERLESS SKIP no device attached (probed with adb='$Adb'; the flag needs a real stream to resize against)"
     exit 2
 }
 

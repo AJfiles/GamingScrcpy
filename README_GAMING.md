@@ -451,30 +451,34 @@ measure it with `--game-telemetry-log` rather than trusting this table:
 scrcpy --video-buffer=0 --game-low-latency --game-telemetry-log
 ```
 
-### Known issue: `--game-borderless-fullscreen` at startup
+### `--game-borderless-fullscreen`: fixed in v4 (was a known issue)
 
-Measured against the real window (`tools/window_style_probe.ps1`, BUILD_REPORT
-§5.1r): with this flag SDL does apply the borderless display-sized window
-(`borderless: requested 1366x768, SDL reports 1366x768`) but the window ends up
-at the content size (1270x592 on a 1366x768 desktop) because the first video
-frame resizes it, and the two auto-resize paths guarded so far are not the ones
-doing it. `--help` says this explicitly rather than promising a borderless
-fullscreen. Until it is fixed, use `--always-on-top` (verified: `WS_EX_TOPMOST`
-really is set) with a normal window, or `--fullscreen` for upstream's exclusive
-fullscreen. The Super+F2 toggle runs the same code and was not measured in this
-session, so treat it as "try it and look" rather than a workaround.
+The flag now delivers what its help text says, measured against the real window
+(`tools/borderless_probe.ps1`, BUILD_REPORT §5.1b5 → §5.1b7):
 
-Re-measured on the S23 Ultra with a control arm (`tools/borderless_probe.ps1`,
-BUILD_REPORT §5.1b5), which corrected the first reading of this defect: the bit
-the flag actually changes is `WS_POPUP` — with the flag the window is a popup,
-without it it is not — while `WS_CAPTION` and `WS_THICKFRAME` are set in both
-arms and say nothing about the flag. So the *borderless* half does reach the
-window; what is lost is the *fullscreen* half: the flag arm measures `313x671`
-inside a `1366x768` work area. An attempt to re-assert the geometry from the
-window-resize event was built and measured too: the window moved to
-`358x768+0+0`, so the origin and the height reached the display but the width
-stayed at the content width, and that change was reverted rather than shipped.
-Until this is fixed, use `--fullscreen` for upstream's fullscreen path.
+```
+note  with flag : … popup=1 … rect 1366x768+0+0 workarea=1366x768+0+0
+note  control   : … popup=0 … rect 329x710+518+17
+BORDERLESS OK the flag is the window state: popup, 1366x768 of 1366x768
+```
+
+Two upstream behaviours had to be re-asserted, because each one quietly undid the
+display-sized window (BUILD_REPORT §5.1b5 documents the attribution, §5.1b7 the
+fix): `sc_screen_show_initial_window()` fits the window to the video content, and
+the window **aspect-ratio lock** then clamped the requested `1366x768` to the
+video's aspect (`358x768` for this phone). The fork now unlocks the aspect ratio
+while the mode is active and re-locks it when you leave it, and an orientation
+change keeps the window on the display instead of shrinking it back to the video.
+
+What a borderless fullscreen window looks like: the picture is **letterboxed**, so
+a portrait phone occupies a `358x768` strip centred in the `1366x768` window, with
+the OSD and the touch markers inside that strip. That is the same behaviour as
+upstream's `--fullscreen` on a display of a different aspect, and it is why the
+pointer mapping is untouched: the fork still only reads the content rect that
+upstream computes from the window size, and gate §13 fails the build if any fork
+change writes it or edits the conversion functions. The mapping through a
+letterbox has **not** been measured on a game yet, so check it with your own
+fingers — see §7 item 4.
 
 ## 7. Validate it on your hardware
 
