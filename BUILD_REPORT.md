@@ -4293,7 +4293,45 @@ than "run it from the extraction": a packaging change must be verified by
 *extracting and executing*, because every age/identity check in §26 reads the
 files on disk and none of them reads the archive's directory structure.
 
+### 5.1b8. v4 closing audit — every directive item against its own evidence
+
+One table for the whole of directive v4, built from `out/dev/verify_v4_step10d.log`
+(**215 passed, 0 failed**, S23 Ultra `<dev-id-1>` attached, desktop idle, nothing
+run concurrently) and `out/dev/pkgselftest_step10.log`. Nothing in the right-hand
+column is a summary of intent: each entry is a gate line, a harness verdict or a
+file in `out/dev/`.
+
+| v4 item | verdict | evidence |
+|---|---|---|
+| §1 grey screen + "No responde" | closed | root cause stderr backpressure; render-stall watchdog; gate §22 `graceful failure: the panel keeps the picture, a dead mirror ends itself`; README §12 troubleshooting |
+| §1.2 protocol a)–g) | done, logged | the codec/renderer arms and the hang characterisation are recorded in the §5.1ap-era sections and `out/bug_gray/`; `--log-level=debug` does not exist in this build, `-V debug` is the working equivalent |
+| §2.1 profile combo in the header | closed | gate §10 `101 configurator controls present in the running window` |
+| §2.2 editor in Avanzado + JSON import/export + validate-on-save | closed | gate §9 `42 profile(s) valid`, `an invalid hotkey is dropped, not sent` |
+| §2.3 dynamic ES/EN description box | closed | gate §9 `builtin=20 valid=20 desc_es=20 desc_en=20` (every built-in profile has a non-empty description in both languages) |
+| §3.1 Spanish display names, IDs/values untouched | closed | gate §15 `354 unique keys`, `227 DynamicResource references`; saved user profiles keep loading because only the label changed |
+| §3.2 ten latency/fluidity profiles | closed | gate §9 against the real `scrcpy.exe`; §3.3's ≥19 requirement is met by 20 built-ins |
+| §4.1 exe logo | closed | gate §25: 7 resolutions `16,24,32,48,64,128,256`, `the exe draws the accent`, live window answers `WM_GETICON` small+big, and the control arm rejects a stock Windows exe |
+| §4.2 splash screen | declined, not skipped silently | the "**Splash (§4.2): not built, on purpose.**" paragraph in the v4 §5 step explains the design reason (a ≤500 ms splash sits against the 250 ms animation ceiling) |
+| §5.1/§5.2 depth hierarchy, shadows, animations | closed except one documented item | gate §23 reduced motion (every duration comes from a key the code can zero), §24 `pass=7 fail=0` with the 500 ms fixture caught; the overlay's scale-from-0.95 is recorded as **not implemented** with its reason |
+| §5.3 one icon set, no emojis | closed | gate §20 (`theme_audit`) plus the emoji scan |
+| §6.1 mirror codecs / renderers on the S23 | closed | §12's four arms all produced pictures: `h264/baseline`, `h264/lowlat`, `h265/baseline`, `h265/lowlat`, each `src=2316x1080` with `fps_med` 59.7–59.9 |
+| §6.1 Tap PCM, profiles launch, 60 s stability, overlay, recording | closed | the PCM tap byte count, §11's real launch/stop (`title='1440p 60'`, `--serial=<dev-id-1> present`, clean exit), §18's paired latency census, and the 60 s recording decode check (§5.1b3) |
+| §6.1 "AV1 in the live mirror" | not applicable on this host | no hardware AV1 *decode* here, so AV1 stays in the recorder; documented rather than tested green |
+| §6.1 "audio suena en PC" (both boxes) | **open, owner** | needs ears in the room; the fork cannot prove audibility and starting media on the phone is forbidden |
+| §6.1 "MP4 de 60 s a 1080p 120 fps" | **open, device limit** | the same phone presents `fps_med=59.7–59.9` in this session's own telemetry, so a 120 fps picture cannot be produced from here without changing device settings, which v4 §7.1 forbids |
+| §6.2 gate §16 PASS | **open, honest SKIP** | `SKIP the phone handed the client 0 audio bytes in 10 s: nothing was playing, so the tap cannot be judged` — the byte count, not the log text, is the load-bearing assertion |
+| §6.3 latency re-baselined | closed | pooled per-second S23 baseline **17 ms median** (§5.1n), replacing the Motorola-era 44 ms; §12's `lat_med=23/26/144/160 ms` are the *different* single-window instrument, which is why every latency claim names its tool |
+| §7 workflow | closed | branch `v4-bug-fix-polish`, one commit per step, §5.1x subsection per change, deliverable = extracted + self-tested ZIP: `PKGSELFTEST OK (164 files, 3 dirs)` |
+| §7.3 invariants | closed | §13 `screen.c changes nothing in the mapping path vs v5.0.1` (the changed hunks are listed as allowed), §14 `2 dirs scanned` + `6521 added lines checked` for device writes, blacklist fixture still detected, `out/dev/adb_audit.log` current |
+
+The audit's honest residue is three boxes, all of them gated by the phone or by a
+human rather than by code: the two audibility checks, gate §16's PASS, and the
+120 fps picture. Add the letterbox touch check from §5.1b7 and README §7 is the
+place to work through them.
+
 ## 6. What could NOT be validated here, and why
+
+
 
 A real device **was** attached for §5.1l, §5.1m and §5.1n (Lenovo TB-9707F), so
 the device-side claims below are narrower than they were. What this host still
