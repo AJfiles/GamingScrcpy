@@ -482,6 +482,34 @@ fingers — see §7 item 4.
 
 ## 7. Validate it on your hardware
 
+### Cuatro comprobaciones pendientes / four checks left (v4)
+
+These are the only items of directive v4 that no automated check can close, and
+why: two need ears in the room, one needs media actually playing on the phone
+(which the read-only rule forbids the tooling from starting), and one needs a
+second pair of eyes on a touch reaction. Run them from the extracted package
+(`scrcpy\scrcpy.exe`), each takes a minute:
+
+1. **Audio por el PC (opus)** — play music on the phone yourself, then
+   `scrcpy --audio-codec=opus`. You should hear it from the PC, slightly delayed.
+   This is gate §16's PASS condition; from here it can only report
+   `SKIP … nothing was playing`.
+2. **Audio por el PC (raw)** — same with `--audio-codec=raw`.
+3. **Toque en los bordes del letterbox** — start with
+   `--game-borderless-fullscreen`, pick a game, tap the four corners and the
+   centre. The phone must react where you tapped, not where the window edge is.
+   The mapping code is proven unchanged by gate §13; nobody has watched the phone
+   react in this geometry yet.
+4. **Auto-rescan** — with the launcher window in the foreground, unplug the USB
+   and plug it back: the device list must refill within ~3 s without you pressing
+   Reescanear ADB (gate §21 measures the ticks, not the reconnection).
+
+Two more that the hardware here cannot produce, so they are documented rather
+than claimed: a real **120 fps picture** (this S23 Ultra presents
+`fps_med=59.7–59.9` in its own telemetry, and changing the panel refresh rate is
+forbidden), and **live AV1 in the mirror** (this PC has no hardware AV1 *decode*,
+so AV1 stays in the recorder, where it is proven).
+
 Some of this has now been run against a real device (Lenovo TB-9707F, SM8550,
 Android 14 — see `BUILD_REPORT.md` §5.1l): mirroring with the OSD, hardware decode,
 recording at full native 1080x2316 without touching the tablet's own resolution,
