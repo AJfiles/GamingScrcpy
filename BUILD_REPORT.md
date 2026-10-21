@@ -4608,6 +4608,53 @@ archive test is **mtime-based**, so a stale archive with a fresh timestamp passe
 the same class of false green as §7d, and the reason the repack has to be followed by
 a fresh `tools/package_selftest.sh` run and not by `PKGDRIFT OK` alone.
 
+### 5.2.6 The repack was made atomic, and the archive's contents were proven by bytes
+
+§5.2.5 ended with the deliverable unverified because the rebuild was refused by a running
+launcher. This closes that, and records two things: how the rebuild was made safe, and how
+the archive's *content* was proven without waiting on the self-test.
+
+**The rebuild is no longer destructive.** `Compress-Archive -DestinationPath <the
+deliverable> -Force` deletes the destination before it can fail on a locked file, which is
+exactly how the archive was lost. Packaging now compresses to `out/staging.zip`, refuses to
+publish unless the staged file exceeds 100 MB, and only then moves it onto
+`dist/GamingScrcpy-win64-fork.zip` and copies it to the repo root. A refused repack leaves
+the previous archive untouched.
+
+**Measured, 2026-10-21 at 02:26 local:**
+
+| quantity | value |
+| --- | --- |
+| `dist/GamingScrcpy-win64-fork.zip` | 126,572,779 B |
+| `GamingScrcpy-win64-fork.zip` (root copy) | 126,572,779 B |
+| archive it replaced | 126,572,166 B — the content really changed |
+| `dist/GamingScrcpy/tools/*` vs repo `tools/*` | byte-identical: a `cmp` loop over every `*.sh` and `*.ps1` printed no drift and no missing file |
+| harness processes alive before each verification stage | 0 (`gamingdemo` / `GamingScrcpyLauncher` / `scrcpy`) |
+
+The two `gamingdemo.exe` windows found at the start were orphans of the chained
+self-test+gate run stopped minutes earlier, and the launcher that had held the exe (pid
+25324) was already gone. One correction belongs in the record: WMI `CreationDate` is
+**local** time (UTC-5 here), and reading it as UTC made a one-minute-old orphan look five
+hours old. Same conclusion, wrong reasoning — establish the clock base before turning a
+timestamp into a story.
+
+**The packaged instrument was proven by content, not by timestamp.** Extracting
+`tools\overlay_test.sh` from the archive yields 18,801 B, `cmp`-identical to the committed
+file, and the packaged copy carries the three lines that constitute the §5.2.5 fix:
+`FRAMES=4000` (line 50), `REPS=2` (line 51), `mindp99=` and `maxdfps=` (lines 264-265).
+That is the check §26's mtime comparison cannot be, and it would have caught the
+restored-but-stale archive.
+
+**Two bugs in my own probe, recorded because they belong to the same family as §7d.** These
+archives store entry names with **backslash** separators and without a `GamingScrcpy/`
+prefix — `Compress-Archive -Path dir\*` archives the folder's *contents* — so
+`unzip -p zip tools/overlay_test.sh` finds nothing; and rewriting a path with
+`tr '/' '\'` printed `tr: warning: an unescaped backslash` and still read 0 bytes. Both
+came out as confident `MISMATCH` / `NOT-IN-ARCHIVE` verdicts about artifacts that were
+correct. The working form sidesteps the separator (`unzip -p zip '*overlay_test.sh'`), and
+the probe now prints how many bytes it read and treats 0 bytes as a broken instrument,
+never as a statement about the package.
+
 ## 6. What could NOT be validated here, and why
 
 
