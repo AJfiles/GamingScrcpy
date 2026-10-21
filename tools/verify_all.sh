@@ -283,6 +283,28 @@ else
     bad "fps(present)=${pf:-none} while frames were presented"
 fi
 
+# Issue #44: a live AV1 mirror printed v_kbps=0 for every second of a 19 s run.
+# The counter is not the decoder's peer (it runs in the demuxer, upstream of the
+# hardware-vs-software choice), so the only honest explanation left was the
+# integer itself: under 1 KB/s rounds to 0. This arm reproduces that reading with
+# no device at all, and asserts the two fields that make it unambiguous.
+qe="$TMP/quiet.log"
+"$DEMO" --frames=150 --width=480 --height=640 --bytes-video=9 > "$qe" 2>&1
+qb="$(sed -n 's/.*video=\([0-9]*\) KB\/s.*/\1/p' "$qe" | head -1)"
+qbytes="$(sed -n 's/.*v_bytes=\([0-9]*\).*/\1/p' "$qe" | head -1)"
+# Capture the whole VID field, unit included, up to the two spaces before AUD.
+# A capture that stops before " KB/S" leaves qosd="<1" while the test below reads
+# "<1 KB/S", and that mismatch failed this arm twice on readings that were correct
+# in all three columns.
+qosd="$(sed -n 's/.*osd\[VID \([^]]*\)  AUD .*/\1/p' "$qe" | head -1)"
+if [ "${qb:-x}" = "0" ] \
+   && awk -v b="${qbytes:-0}" 'BEGIN { exit !(b > 0 && b < 1024) }' \
+   && [ "$qosd" = "<1 KB/S" ]; then
+    ok "a quiet scene: video=0 KB/s with v_bytes=${qbytes} and OSD \"VID ${qosd}\""
+else
+    bad "quiet scene is ambiguous (video=${qb:-none} KB/s, v_bytes=${qbytes:-none}, OSD=\"VID ${qosd:-none}\")"
+fi
+
 if [ "$QUICK" -eq 0 ]; then
     head_ "8. named-pipe transports (real pipe consumer, PowerShell)"
     ps() { powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$1" 2>&1; }
@@ -465,6 +487,13 @@ else
             <<< "$(printf '%s' "$lp" | grep '^RESULT')"
         while IFS= read -r line; do printf '        %s\n' "$line"; done \
             <<< "$(printf '%s' "$lp" | grep 'telemetry-summary')"
+    elif printf '%s' "$lp" | grep -q '^SKIP '; then
+        # The probe says so when the phone showed a still screen on every arm: the
+        # mirror then had no frames to time, and a percentile computed from the age
+        # of one old frame is not a latency measurement. Report it as not-measurable
+        # with the reason rather than as a product failure (§17.5 SKIP-safe).
+        printf '  \033[33mSKIP\033[0m  %s\n' "$(printf '%s' "$lp" | sed -n 's/^SKIP //p' | head -1)"
+        printf '%s\n' "$lp" | grep -E '^(RESULT|NOTE)' | sed 's/^/        /'
     else
         bad "device latency probe failed"
         printf '%s\n' "$lp" | sed 's/^/        /'

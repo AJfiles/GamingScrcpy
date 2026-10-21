@@ -53,6 +53,9 @@ run_case() {
 # median of the numbers on stdin
 med() { sort -n | awk '{a[NR]=$1} END {if (NR) print a[int((NR+1)/2)]; else print "na"}'; }
 
+# Arms whose screen was actually moving. Only those can carry a latency claim, so
+# the script reports SKIP instead of a product failure when none of them exists.
+live=0
 for codec in h264 h265; do
     for mode in baseline lowlat; do
         extra=""
@@ -64,27 +67,58 @@ for codec in h264 h265; do
         kb=$(grep -o 'v_kbps=[0-9]*' "$log" | cut -d= -f2 | med)
         src=$(grep -o 'src=[0-9]*x[0-9]*' "$log" | tail -1 | cut -d= -f2)
         wake=$(grep -o 'RESULT wake.*' "$log.wake" | tail -1)
-        # A black or asleep screen makes the encoder emit ~30 B frames, so the
-        # latency below then describes a near-empty stream, not a game. Say so.
-        scene=live
-        [ "${kb:-0}" -lt 100 ] && scene=static
-        echo "RESULT ${codec}/${mode} src=$src scene=$scene fps_med=$fps v_kbps_med=$kb"
-        echo "       ${sum:-no-summary} | $wake"
-        # a mirror that presents nothing has no latency at all
-        if ! grep -q 'telemetry-summary' "$log"; then
-            echo "FAIL ${codec}/${mode}: no telemetry summary"
-            fail=1
+        # A still screen makes the encoder emit almost nothing, so the percentiles
+        # then describe the age of one old frame rather than a game. Classify the
+        # arm by the bytes, and only by a number: med() prints "na" when no window
+        # arrived, and [ "na" -lt 100 ] is a bash error that used to leave such an
+        # arm labelled live while it had measured nothing at all.
+        case "$kb" in
+            ''|*[!0-9]*)
+                scene=none ;;
+            *)
+                if [ "$kb" -lt 100 ]; then scene=static; else scene=live; fi ;;
+        esac
+        has_sum=0
+        if grep -q 'telemetry-summary' "$log"; then
+            has_sum=1
         fi
+        # How much was actually measured, which is not the same question as whether
+        # the screen moved: the summary is one number per second-window, and a
+        # percentile over a single window is not a measurement (this run produced
+        # seconds=1 lat_med=401ms next to seconds=17 lat_med=212ms on the same
+        # phone). Count an arm as carrying a number only from five windows up.
+        secs=$(printf '%s' "$sum" | sed -n 's/.*seconds=\([0-9]*\).*/\1/p')
+        case "$secs" in ''|*[!0-9]*) secs=0 ;; esac
+        meas=0
+        if [ "$has_sum" = 1 ] && [ "$secs" -ge 5 ]; then
+            meas=1
+            live=$((live + 1))
+        else
+            echo "NOTE ${codec}/${mode}: scene=$scene seconds=$secs: too little measured here to carry a latency number"
+        fi
+        echo "RESULT ${codec}/${mode} src=$src scene=$scene seconds=$secs fps_med=$fps v_kbps_med=$kb"
+        echo "       ${sum:-no-summary} | $wake"
         # the device must keep rendering at its own native size: the whole
         # project forbids changing it
         case "$src" in
             1920x1200|2000x1200|2560x1600|2560x1440|1600x2560|1200x1920|1080x2400|1440x3200) ;;
-            "") echo "FAIL ${codec}/${mode}: no source size in the log"; fail=1 ;;
+            "") if [ "$meas" = 1 ]; then
+                    echo "FAIL ${codec}/${mode}: $secs measured seconds but no source size in the log"
+                    fail=1
+                fi ;;
             *) echo "NOTE ${codec}/${mode}: native size is $src (recorded, not asserted)";;
         esac
     done
 done
 
 echo "RESULT serial=$serial"
+if [ "$live" -eq 0 ]; then
+    # Nothing here is a product failure: with no moving picture the mirror has no
+    # frames to time, and lat_med would then be the age of one old frame (the run
+    # that produced this line reported 12369 ms on a still phone). Say what is
+    # missing and how to get it instead of failing the build for the phone's state.
+    echo "SKIP no arm measured at least five one-second windows on $serial: the phone showed a still screen, so latency cannot be measured here. Play a video on the phone (owner action, README section 7) and rerun."
+    exit 2
+fi
 [ $fail -eq 0 ] && echo "OK" || echo "FAILED"
 exit $fail

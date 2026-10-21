@@ -15,6 +15,22 @@
 #   not armed  a healthy session must not be killed by it
 #   no video   a --no-playback recording never paints, so it must never be armed
 #
+# The paint arms test "did a first frame arrive", which is what the bug was. They
+# must not read that as "how many seconds produced a line": the telemetry line is
+# emitted when a 1 s window rolls and a window only rolls when a packet arrives
+# (gaming.c:2114), so a phone showing a static screen legitimately produces one or
+# two lines in eight seconds. That threshold (>= 3) made this section measure the
+# activity of the device rather than the behaviour of the panel, and it failed on
+# a Motorola whose screen went quiet while the mirror kept the picture. The line
+# count is still printed, with the best fps the session reported, so a quiet
+# device is visible in the log instead of being silently accepted.
+#
+# The second paint arm asks for --game-overlay-visible, which the shipped client
+# refuses at startup (overlay.c:1249) because that was the exact cause of the grey
+# window. So the arm proves two things: the refusal is still there, and the mirror
+# still paints. Opening the panel once the picture is up is measured without a
+# device by tools/overlay_test.sh (gate 18).
+#
 # Liveness is read from the Windows process table by image name: bash's $! is an
 # MSYS2 pid, which tasklist does not know, and the arms run one at a time so the
 # count of scrcpy.exe rows is unambiguous. Without a device the session fails for
@@ -78,24 +94,46 @@ arm() { # name  extra-flags  seconds  expect(paint|alive|gone)
     wait "$pid" 2>/dev/null
     rc=$?
 
-    local tel stalled
+    local tel stalled maxfps refused
     tel=$(grep -c 'telemetry:' "$log" 2>/dev/null)
     stalled=$(grep -c 'video-stalled' "$log" 2>/dev/null)
+    maxfps=$(grep -o 'fps=[0-9.]*' "$log" 2>/dev/null | sed 's/fps=//' | sort -rn | head -1)
+    refused=$(grep -c 'is disabled, it costs the mirror' "$log" 2>/dev/null)
     echo "note  $name [$extra] alive=$alive after=$((i / 2))s exit=$rc " \
-         "telemetry=$tel stall_lines=$stalled"
+         "telemetry=$tel best_fps=${maxfps:-0} stall_lines=$stalled"
 
     case $expect in
     paint)
-        # the regression test for the grey window: the panel is enabled and the
-        # mirror still paints, without the watchdog having anything to say
-        if [ "$tel" -lt 3 ]; then
-            echo "FAIL  $name: the mirror painted $tel times, the panel cost it the picture"
+        # the regression test for the grey window: the mirror got its first frame
+        # and the watchdog had nothing to say about it
+        if [ "$tel" -eq 0 ]; then
+            echo "FAIL  $name: the mirror never painted, see $log"
             fails=$((fails + 1))
         elif [ "$stalled" -ne 0 ]; then
             echo "FAIL  $name: a painting session was reported as stalled"
             fails=$((fails + 1))
         else
-            echo "OK    $name: the filter panel does not cost the mirror its first frame"
+            [ "$tel" -lt 3 ] && echo "note  $name: only $tel one-second window(s) carried a " \
+                "new frame; that is the device screen being still, not a lost picture"
+            echo "OK    $name: the filter panel did not cost the mirror its first frame"
+        fi ;;
+    paint+refused)
+        # as above, plus the guard that makes the request safe: the client must
+        # still refuse to build the panel window before the first paint
+        if [ "$refused" -eq 0 ]; then
+            echo "FAIL  $name: --game-overlay-visible is no longer refused at startup,"
+            echo "      so this arm no longer proves the panel cannot steal the first frame"
+            fails=$((fails + 1))
+        fi
+        if [ "$tel" -eq 0 ]; then
+            echo "FAIL  $name: the mirror never painted, see $log"
+            fails=$((fails + 1))
+        elif [ "$stalled" -ne 0 ]; then
+            echo "FAIL  $name: a painting session was reported as stalled"
+            fails=$((fails + 1))
+        elif [ "$refused" -gt 0 ]; then
+            [ "$tel" -lt 3 ] && echo "note  $name: only $tel one-second window(s) carried a new frame"
+            echo "OK    $name: the startup panel request is refused and the mirror paints"
         fi ;;
     gone)
         # a shorter timeout than the device needs: the watchdog must speak and
@@ -123,9 +161,23 @@ arm() { # name  extra-flags  seconds  expect(paint|alive|gone)
     rm -f "$out/rec_$name.mp4"
 }
 
+# CONTROL=1: prove the first-frame assertion can still fail. --no-playback never
+# presents a frame by design, so a paint arm run against it must report FAIL; if it
+# passes, the assertion has become vacuous (a threshold lowered too far looks exactly
+# like this) and the section must not be trusted.
+if [ "${CONTROL:-0}" = 1 ]; then
+    arm control "--no-playback --record=$out/rec_control.mp4" 4 paint
+    if [ $fails -eq 0 ]; then
+        echo "FAIL  control: the paint arm passed on a session that cannot paint"
+        exit 1
+    fi
+    echo "OK    control: the paint arm fails when nothing is presented"
+    exit 0
+fi
+
 arm panel-hidden "--game-filter-overlay --game-stall-timeout=off" 8 paint
-arm panel-shown "--game-filter-overlay --game-overlay-visible \
---game-stall-timeout=off" 8 paint
+arm panel-startup "--game-filter-overlay --game-overlay-visible \
+--game-stall-timeout=off" 8 'paint+refused'
 arm watchdog "--game-stall-timeout=100" 8 gone
 arm default "--game-stall-timeout=5000" 6 alive
 arm no-video "--no-playback --record=$out/rec_novideo.mp4" 6 alive

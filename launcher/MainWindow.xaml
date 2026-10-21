@@ -175,6 +175,8 @@
                             <TextBlock Text="{DynamicResource SecOneClick}" Style="{StaticResource SectionHeader}"/>
                             <Button x:Name="BtnMirror" Content="{DynamicResource BtnMirror}"
                                     Style="{StaticResource Primary}" Click="OnStartMirror"/>
+                            <Button x:Name="BtnPresent" Content="{DynamicResource BtnPresent}"
+                                    Click="OnPresent" ToolTip="{DynamicResource HelpPresent}"/>
                             <Button x:Name="BtnMirrorRecord"
                                     Content="{DynamicResource BtnMirrorRecord}"
                                     Style="{StaticResource Record}" Click="OnStartMirrorRecord"/>

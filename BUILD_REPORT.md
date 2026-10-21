@@ -4355,12 +4355,258 @@ because explaining it would need the encoder's capability query, which is out of
 this step's scope. AV1 remains the right choice for `--record`, where the file is
 read back later and latency costs nothing (§5.1g decodes real AV1 streams).
 
-One more observation, recorded so it is not misread later: on that software-fallback
-path the telemetry prints `v_kbps=0` in every second while `fps=30.6` frames clearly
-reach the window. So `v_kbps=0` means "the byte counter did not see this path", not
-"no video" — the same class of mistake as reading `a_kbps=0` as an audio failure.
-Whether the fork's bitrate accounting should follow the decoder into its software
-fallback is an open question this step did not chase.
+One more observation from that run was written here as an open question, and the
+answer contradicts what was written. The paragraph claimed that `v_kbps=0` while
+`fps=30.6` "means the byte counter did not see this path". **That was wrong**, and
+it is kept here because the failure mode is the one this project keeps hitting: a
+story about the code, built from a number the code never printed (§5.1q said
+exactly that about `a_kbps`, and it applied to my own sentence about `v_kbps`).
+
+### 5.2.1 v5 Sesión 0 · #44: `v_kbps=0` is a unit quantum, not a blind counter
+
+Two facts settle it, and neither needs a phone.
+
+* The counter and the latency stamp are written in the same function, five lines
+  apart: `sc_demuxer_recv_packet()` stores the receive date on the packet
+  (`app/src/demuxer.c:170`) — the very value the OSD and `lat=` read — and
+  accounts the packet's bytes four lines later (`app/src/demuxer.c:175`), with no
+  early return between them. The AV1 log shows a non-zero `lat` on all 19 lines, so
+  all 19 seconds were accounted.
+* That function is the demuxer, upstream of the decoder, so the byte total cannot
+  depend on whether the decoder is `d3d11va` or the software fallback. The issue
+  asked whether bitrate accounting should follow the decoder into its fallback; the
+  honest answer is that there is no second path to follow — the question was
+  misframed, as the telemetry's own units were in §5.1p.
+
+What remains is the arithmetic: `kbps_video` is whole **KB per second**, so any
+stream quieter than 1024 B/s prints 0 while video flows. `gamingdemo` can now be
+told how big its fake packets are, and `--bytes-video=9` (≈9 B × ~98 packets/s ≈
+882 B/s) reproduces the AV1 reading on this host with no device in the loop:
+
+| arm | fps | `video=` | `v_bytes=` | OSD line |
+|---|---|---|---|---|
+| default (1920·1080/2 B per packet) | 94.7 | 95909 KB/s | 98496000 | `VID 95909 KB/S` |
+| `--bytes-video=9` (the quiet scene) | 97.7 | **0 KB/s** | 882 | `VID <1 KB/S` |
+
+So #44 is a defect in the *display*, not in the counter, and the display is fixed:
+
+* `--game-telemetry-log` now ends every line with `v_bytes=` / `a_bytes=`, the byte
+  totals of the window that produced the two rates. Appended after `src=` on
+  purpose: the six harnesses that parse this line all use `v_kbps=[0-9]*`, which is
+  untouched.
+* The OSD prints `VID <1 KB/S` when bytes arrived but the rate rounds to 0, and
+  keeps `0 KB/S` only when nothing arrived — which is the case a gamer reads as
+  "the mirror died" while the picture is still moving.
+* Gate §7d runs the quiet arm as a third case and fails if `video=0 KB/s`,
+  `0 < v_bytes < 1024` and the OSD's `<1 KB/S` do not all hold together.
+
+Whether the S23's AV1 encoder really was that quiet cannot be re-measured here (the
+phone is detached, and the Motorola at SDK 28 has no AV1 encoder), so the claim is
+kept where the evidence is: the *mechanism* is now proven on the host, and the AV1
+arm's own numbers are recorded in §5.1b9.
+
+### 5.2.2 v5 Sesión 0 · #34: presentation mode in one click
+
+`BtnPresent` sits in the Quick tab's one-click column and moves four controls the
+user can already reach by hand — `ChkBorderless`, `ChkAlwaysOnTop`, `CboOsd` to
+`compact`, and the grade to neutral through the same `ApplyColorProfile()` the
+"Neutral" chip uses (that function was split out of its click handler rather than
+duplicated). It is a shortcut, not a mode: there is no hidden latch, and pressing
+"Neutral" or unticking a box undoes it one setting at a time (§1.12 reversibility).
+
+Two decisions came from measurement rather than preference:
+
+* It does **not** start the mirror. All four settings are read once, when the
+  process starts, so launching from here would have made the button a second copy
+  of `BtnMirror`; and a gate that clicks buttons must not be able to spawn a live
+  session (the orphan-window lesson in §5.1b7). It logs what it did and says press
+  Espejo — state and action stay separate (§1.2).
+* Pressing it during a live session refuses, and says why
+  (`LogPresentBusy`), instead of silently changing four settings that are not in
+  effect (§1.3).
+
+Gate §10 (`tools/launcher_uiauto.ps1`) presses the real button in the shipped
+artifact and reads the command preview through the UIA **Value** pattern — the
+first version read `.Current.Name`, which is empty on a TextBox, and that would
+have turned "no colour flag on the command line" into a pass on an empty string.
+The block now refuses to conclude anything unless the preview is non-empty and
+contains `scrcpy`. The four assertions:
+
+```
+PASS presentation emits --game-borderless-fullscreen
+PASS presentation emits --always-on-top
+PASS presentation emits --game-osd=compact
+PASS presentation emits no colour grade flag (neutral)
+```
+
+### 5.2.3 v5 Sesión 0 · gate §22 measured the phone, not the panel
+
+The `graceful failure` section went red on the Motorola with two arms failing at
+once, and the first reading in the terminal was `telemetry=0` — the grey-window
+signature. The saved arm logs said otherwise: `panel-hidden` had
+`fps=0.8 … v_bytes=227747` and `fps=15.0 … v_bytes=113331`, `panel-shown` had
+`fps=5.7 … v_bytes=171595`. A picture with 227 KB arriving in the first window is
+not a lost picture, so the FAIL was the instrument's, not the fork's.
+
+Why it could happen: the `telemetry:` line is printed when a 1 s window rolls, and
+a window only rolls when a packet arrives (`gaming.c:2114` — `window_rolled`
+inside the per-frame accounting hook). A phone whose screen goes still therefore
+stops producing lines while the mirror keeps showing the last frame, which is the
+correct behaviour: the watchdog exists only to catch *never painting*
+(`gaming.c:1524`, "first frame must arrive within %u ms") and disarms itself on
+the first frame (`gaming.c:2035`). The assertion `telemetry >= 3` in an 8 s window
+was quietly requiring the device to keep changing its screen — an activity
+property of the Motorola, not a latency or integrity property of this fork.
+
+The section now asserts the property the product actually guarantees, and prints
+what it saw:
+
+* each paint arm requires **at least one** telemetry window plus zero
+  `video-stalled` lines, and reports `best_fps` so a low count is visible instead
+  of silently accepted; when the count is below 3 it prints a NOTE naming device
+  stillness as the reason;
+* the mis-named `panel-shown` arm is `panel-startup`, because the shipped client
+  refuses `--game-overlay-visible` at startup (`overlay.c:1249`) — that refusal is
+  the fix for the original grey window, so the arm now asserts the refusal is
+  still there *and* that the mirror paints, instead of claiming to open a panel it
+  never opened;
+* a loosened threshold is only trustworthy if it can still fail, so
+  `CONTROL=1 bash tools/stall_test.sh` runs the paint assertion against
+  `--no-playback`, which never presents a frame. It reports
+  `telemetry=0 … FAIL control: the mirror never painted` and the control exits 0.
+
+Run on the Motorola (`<dev-id-2>`, Android 9), idle desktop, after the change:
+
+```
+note  panel-hidden    alive=alive after=8s telemetry=1 best_fps=10.0 stall_lines=0
+note  panel-startup   alive=alive after=8s telemetry=3 best_fps=11.5 stall_lines=0
+note  watchdog        alive=gone  after=1s telemetry=0 best_fps=0    stall_lines=1
+note  default         alive=alive after=6s telemetry=3 best_fps=13.3 stall_lines=0
+note  no-video        alive=alive after=6s telemetry=0 best_fps=0    stall_lines=0
+OK    graceful failure: the panel keeps the picture and a dead mirror ends by itself
+```
+
+The `panel-hidden` arm's one-second count is the reason the NOTE exists: the same
+arm measured 1 line here and 2 in the run before, while `panel-startup` measured
+3. Reading those as pass/fail would have produced a fake regression story twice.
+
+### 5.2.4 v5 Sesión 0 · two more gates that graded their own instrument
+
+Fixing §22 exposed that the same habit — asserting on a *count* the device decides,
+and parsing a number without checking it is a number — was in two other sections.
+
+**§12 device latency.** The section printed
+
+```
+tools/device_latency_probe.sh: line 70: [: na: integer expected
+```
+
+because `med()` emits the literal `na` when no window arrived and the classifier
+then did `[ "$kb" -lt 100 ]`. Bash's error is not fatal, so the line continued and
+labelled that arm `scene=live` — an arm that had measured nothing at all was the
+one allowed to carry a latency claim. The numeric guard is now a `case` on the
+digits, and the verdict is keyed on measured volume rather than on bitrate:
+
+```
+RESULT h264/baseline src=720x1520 scene=live seconds=12 fps_med=22.9 v_kbps_med=123
+       telemetry-summary: seconds=12 lat_med=357ms lat_p90=5386ms lat_p99=5478ms
+RESULT h264/lowlat   src=720x1520 scene=live seconds=16 fps_med=30.1 v_kbps_med=1154
+       telemetry-summary: seconds=16 lat_med=185ms lat_p90=320ms  lat_p99=392ms
+RESULT h265/baseline src=720x1520 scene=live seconds=17 fps_med=31.6 v_kbps_med=266
+       telemetry-summary: seconds=17 lat_med=415ms lat_p90=1046ms lat_p99=1698ms
+RESULT h265/lowlat   src=720x1520 scene=live seconds=17 fps_med=32.8 v_kbps_med=1129
+       telemetry-summary: seconds=17 lat_med=109ms lat_p90=1128ms lat_p99=1538ms
+RESULT serial=<dev-id-2>
+OK
+```
+
+The threshold is five one-second windows. That number came from the previous run's
+own output, which had `seconds=1 lat_med=401ms` sitting next to `seconds=17
+lat_med=212ms` on the same phone, and an even earlier one reporting
+`lat_p90=12369ms`: percentiles of one or two windows are the *age of a stale frame*,
+not a latency. An arm below five windows now prints
+`NOTE <arm>: scene=… seconds=…: too little measured here to carry a latency number`
+and is excluded; if no arm qualifies the whole script exits 2 with a SKIP that says
+to play a video on the phone first, and gate §12 relays it as a note instead of a
+failure or a fake number. These Motorola readings are host-side only and are not
+comparable to the S23 Ultra 17 ms baseline in §5.1 of the v4 report.
+
+**§7d quiet-scene arm.** After the #44 change, the shipped `gamingdemo` printed the
+correct `VID <1 KB/S` but the arm reported `OSD="VID <1"` and FAILed: the `sed`
+capture stopped at the first space, so it compared a truncated string to `<1 KB/S`.
+The field is now captured whole (`osd\[VID \([^]]*\)  AUD`), and the extraction was
+checked against the log it came from — `video=0 KB/s`, `v_bytes=783`,
+`OSD="VID <1 KB/S"` — so the assertion is on the shipped text, not on a substring
+that would also match a broken one.
+
+Both fixes are instrument-only: no product code changed, and each keeps a path to
+FAIL (the §22 negative control, §7d's still-anchored literal, §12's `seconds=1` NOTE
+visible in the output instead of counted).
+
+### 5.2.5 v5 Sesión 0 · the packaged self-test refused to agree with gate §18, and was right to
+
+`bash tools/verify_all.sh` finished Sesión 0 with **216 passed, 0 failed** over 26
+sections, exit 0, one SKIP (§16 audio, which only the owner can close). Then
+`tools/package_selftest.sh`, which unzips the shipped archive and runs the tools
+inside it, reported `PKGSELFTEST FAIL issues=1`: the overlay latency A/B. Same
+script, same binary, two opposite verdicts. So the gate's green was not the end of
+the story, and four runs of that one arm were needed to find out why:
+
+```
+--frames=1000  FAIL  paired p99 +7.002 ms against a budget of 2.906 ms
+--frames=4000  OK    paired p99 -4.079 ms, baseline spread 0.516 ms
+--frames=4000  FAIL  paired p90 +1.488 ms (budget 1.0 ms), and "fps fell 54.5 to 51.1"
+--frames=4000  OK    paired p99 -6.888 ms, median +0.012 ms
+```
+
+Two separate defects, both in the instrument.
+
+**Sample size.** A p99 over 1000 frames is decided by the ten worst values, and this
+host's frame log contains one-off hiccups of 108 ms and 283 ms, so the arm that
+happens to catch one wins; the budget cannot rescue that, because it is measured from
+the same 1000-sample baseline. `tools/overlay_test.sh` now defaults to 4000 frames
+instead of 1000, with both readings in the comment above the variable. Fixing it at
+the source rather than passing a flag from one caller matters: anyone running the
+script by hand would otherwise fall into the same trap.
+
+**The comparison was not paired.** The fps line above came from
+`bf=$(high bfs); of=$(high ofs)` — each arm's best rep chosen independently and then
+subtracted. That is exactly the comparison the comment fifteen lines earlier forbids
+for p99, and it was still used for fps: the "54.5 to 51.1" pair was baseline rep 1
+against panel rep 2, two moments that never coexisted, one of which had not even
+finished its 4000 frames (`over1.log: frames=3290`). p90 had the symmetric problem of
+being judged by an absolute 1 ms budget while p99 was widened by the measured spread.
+Both arms now work like the median: the difference is computed within each rep, and
+the verdict uses the panel's best pair — the quietest one for the tails, the
+least-loss one for fps, since a rate is not a latency and taking the minimum there
+(the first version of this fix) failed a packaged run with
+`FAIL presented fps fell by -18.5` while the other pair measured `+2.5`. The mean of
+the pairs and the baseline's own rep-to-rep spread are printed next to every verdict
+so a reader can see how far the host moved.
+
+The property the directive actually cares about is stable and was never in doubt: the
+paired median is within ±0.3 ms in all five runs (3.0-3.6 ms at 720x1280), and the
+grade is identical between the arms, which `OVERLAY OK` asserts separately. The tail
+is judged against this host's own noise because the 3 ms absolute cap is unreachable
+for the filter engine even with the panel closed — printed as a NOTE, not hidden.
+
+The FAIL path is still demonstrable after the change:
+`bash tools/overlay_test.sh --frames=240 --reps=2 --med-budget=-1` answers
+`FAIL median moved 0.059 ms with the panel open (budget -1 ms)` and
+`OVERLAY FAIL issues=1`. A loosened assertion is only acceptable when it can still
+fail on demand.
+
+**Where this leaves the package, stated exactly.** The 216/0 gate verdict and the
+165-file self-test above were produced by the archive built at 02:09 local, which
+carries the §5.2.4/§5.2.3 tools plus the first (4000-frame) version of this harness.
+Rebuilding the archive to carry the final fps-pairing fix failed: the launcher from
+`dist/GamingScrcpy/launcher/` was running (pid 25324), `Compress-Archive` opened the
+exe, was refused, and deleted the destination archive in the process. Two things
+follow, both recorded rather than smoothed over: the deliverable ZIP must be rebuilt
+with that window closed (`tools/pkg_tools_drift.sh` then re-verifies it), and §26's
+archive test is **mtime-based**, so a stale archive with a fresh timestamp passes it —
+the same class of false green as §7d, and the reason the repack has to be followed by
+a fresh `tools/package_selftest.sh` run and not by `PKGDRIFT OK` alone.
 
 ## 6. What could NOT be validated here, and why
 

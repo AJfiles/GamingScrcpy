@@ -188,6 +188,27 @@ namespace GamingScrcpyLauncher
             new[] { "BtnMirror", "Espejo (latencia m\u00ednima)", "Mirror (low latency)" },
             new[] { "BtnMirrorRecord", "Espejo + grabaci\u00f3n autom\u00e1tica",
                     "Mirror + auto-record" },
+            new[] { "BtnPresent", "Modo presentaci\u00f3n (un clic)",
+                    "Presentation mode (one click)" },
+            new[] { "HelpPresent",
+                    "Activa de una vez ventana sin bordes, siempre encima, OSD compacto y "
+                    + "color neutro, y deja listo el espejo: pulsa Espejo para lanzarlo. "
+                    + "Los cuatro ajustes siguen visibles cada uno en su pesta\u00f1a, as\u00ed "
+                    + "que puedes anularlos uno a uno.",
+                    "Turns on borderless, always on top, compact OSD and a neutral grade in "
+                    + "one go and leaves the mirror ready: press Mirror to start it. Each of "
+                    + "the four stays visible in its own tab, so you can undo them one by "
+                    + "one." },
+            new[] { "LogPresent",
+                    "Presentaci\u00f3n: sin bordes + siempre encima + OSD compacto + color "
+                    + "neutro. Pulsa Espejo para lanzarlo.",
+                    "Presentation: borderless + always on top + compact OSD + neutral grade. "
+                    + "Press Mirror to start it." },
+            new[] { "LogPresentBusy",
+                    "Presentaci\u00f3n no aplicable: esos cuatro ajustes se leen al lanzar "
+                    + "el espejo. Det\u00e9n la sesi\u00f3n y vuelve a pulsar el bot\u00f3n.",
+                    "Presentation cannot apply now: those four are read when the mirror "
+                    + "starts. Stop the session and press the button again." },
             new[] { "BtnRecordOnly", "Solo grabar (sin ventana)", "Record only (no window)" },
             new[] { "BtnStop", "Detener", "Stop" },
             new[] { "HintShortcuts",

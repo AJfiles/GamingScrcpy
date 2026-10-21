@@ -687,6 +687,27 @@ public partial class MainWindow : Window
     private async void OnStartRecordOnly(object sender, RoutedEventArgs e) =>
         await StartAsync(record: true, noWindow: true);
 
+    // Directive v4 §6 / issue #34: one click for showing the phone to a room.
+    // It only moves four controls the user can see and set by hand -- the two
+    // window checkboxes, the OSD dropdown and the grade chips -- so it is a
+    // shortcut with no hidden mode to escape from, and it stops at configuring:
+    // all four are read once, when the mirror process starts, so pressing this
+    // during a live session would show settings that are not in effect.
+    private void OnPresent(object sender, RoutedEventArgs e)
+    {
+        if (_scrcpy is { HasExited: false })
+        {
+            Log(Loc.T("LogPresentBusy"));
+            return;
+        }
+        ChkBorderless.IsChecked = true;
+        ChkAlwaysOnTop.IsChecked = true;
+        SelectByValue(CboOsd, "compact", "full", "compact", "none");
+        ApplyColorProfile("neutral");
+        PushConfig();
+        Log(Loc.T("LogPresent"));
+    }
+
     private async Task StartAsync(bool record, bool noWindow = false)
     {
         if (_scrcpy is { HasExited: false })

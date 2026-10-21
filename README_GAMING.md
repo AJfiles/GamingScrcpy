@@ -904,8 +904,12 @@ FFmpeg-based consumers.
   None sets `--max-size`, `--crop` or a display id: the device keeps its own
   resolution (see the note in §7 about doing that yourself).
 * **One-click launch** — Mirror, Mirror + auto-record, Record only (no window),
-  Stop, **Wireless ADB guide** (it shows the manual procedure instead of
-  reconfiguring the device), Pair wireless, Connect ip:port.
+  Stop, **Presentation mode** (one click that sets borderless, always-on-top,
+  compact OSD and a neutral grade, then tells you to press Mirror — the four
+  settings are read when the process starts, so it refuses during a live session
+  and says why; every one of them stays where you can undo it), **Wireless ADB
+  guide** (it shows the manual procedure instead of reconfiguring the device),
+  Pair wireless, Connect ip:port.
 * **Encoder preset** — `device default / ultrafast / fast / medium`, emitted as
   `--video-codec-options=latency:int=N` (MediaFormat's latency key, the closest
   Android equivalent of an x264 preset; a hardware encoder may ignore it). The
@@ -1053,7 +1057,12 @@ exits 1, so don't waste a troubleshooting run on it.
 `--game-telemetry-log` prints one line per second (`INFO: telemetry: fps=…`).
 No lines at all means no frame was ever presented, which is the grey screen;
 lines with `fps≈60` mean the picture is live and a complaint is about something
-else. As of v4 the fork will not let you sit in front of a grey window: if the
+else. Since v5 each line also carries `v_bytes=` / `a_bytes=`, the bytes that
+arrived in that second: a rate under 1 KB/s really does print `v_kbps=0` (a static
+screen encoded as AV1 measured ~900 B/s while still showing 30 fps), and the OSD
+says `VID <1 KB/S` in that case rather than a bare `0`, which used to look like a
+dead stream. Judge "is anything coming" by `v_bytes`/`fps`, not by `v_kbps`. As of
+v4 the fork will not let you sit in front of a grey window: if the
 mirror has not presented its first frame within 5 s it logs
 
 ```

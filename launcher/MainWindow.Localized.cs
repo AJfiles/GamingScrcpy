@@ -150,6 +150,14 @@ namespace GamingScrcpyLauncher
             {
                 return;
             }
+            ApplyColorProfile(tag);
+        }
+
+        // Split from the click handler because the presentation shortcut reuses
+        // it: "neutral" is not a look, it is every filter off and every slider at
+        // its own zero, which is what a projector or a capture wants.
+        private void ApplyColorProfile(string tag)
+        {
             // Every number here maps to a real fork flag, and a profile only
             // enables the filters it actually moves: each enabled filter costs
             // host CPU on the frame path, so switching all six on for a look

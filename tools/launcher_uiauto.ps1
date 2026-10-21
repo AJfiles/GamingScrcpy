@@ -66,10 +66,11 @@ try {
     # in the language the test was written in -- it failed for every tab but
     # 'Control' once the launcher remembered Spanish.
     $plan = @(
-        @{ key='TabQuick';        ids=@('BtnMirror','BtnMirrorRecord','BtnRecordOnly',
-                                        'BtnStop','TxtDeviceModel','TxtDeviceBattery',
-                                        'TxtDeviceTemp','TxtPerfLatency','TxtPerfFps',
-                                        'TxtPerfVideo','TxtPerfAudio') }
+        @{ key='TabQuick';        ids=@('BtnMirror','BtnPresent','BtnMirrorRecord',
+                                        'BtnRecordOnly','BtnStop','TxtDeviceModel',
+                                        'TxtDeviceBattery','TxtDeviceTemp',
+                                        'TxtPerfLatency','TxtPerfFps','TxtPerfVideo',
+                                        'TxtPerfAudio') }
         @{ key='TabCapture';      ids=@('CboVideoCodec','CboBitrate','LblBitrate',
                                         'CboMaxFps','LblMaxFps','CboAudioCodec',
                                         'CboAudioBitrate','LblAudioBitrate','CboHwdec',
@@ -162,6 +163,58 @@ try {
     if ($tabs.Count -gt 0) {
         $tabs[0].GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
         Start-Sleep -Milliseconds 400
+    }
+
+    # v4 §6 / issue #34: the presentation one-click. Pressing it has to move four
+    # real controls, and the command preview is the evidence -- it is rebuilt from
+    # the same Collect() that produces the process arguments. Pressing it is safe
+    # here because nothing is written to the profile until an explicit save. Done
+    # after the tab loop on purpose: WPF keeps an unselected tab's content out of
+    # the automation tree, so BtnPresent only exists once Quick is showing.
+    $present = ById $window 'BtnPresent'
+    if (-not $present) {
+        Write-Output 'FAIL BtnPresent not reachable on the Quick tab'; $fail++
+    } else {
+        try {
+            ($present.GetCurrentPattern(
+                [System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+        } catch {
+            Write-Output "FAIL BtnPresent did not respond: $($_.Exception.Message)"; $fail++
+        }
+        Start-Sleep -Milliseconds 700
+        $cmdEl = ById $window 'TxtCommand'
+        # TxtCommand is a read-only TextBox: UIA carries a TextBox's text in the
+        # Value pattern, and its Name is empty. Reading Name here used to report a
+        # silent "no colour flag" pass on an empty string, so the text has to be
+        # read and checked for being real before any conclusion is drawn from it.
+        $line = ''
+        if ($cmdEl) {
+            try {
+                $vp = $cmdEl.GetCurrentPattern(
+                    [System.Windows.Automation.ValuePattern]::Pattern)
+                if ($vp) { $line = $vp.Current.Value }
+            } catch {}
+            if (-not $line) { $line = $cmdEl.Current.Name }
+        }
+        if (-not $line -or -not $line.Contains('scrcpy')) {
+            Write-Output "FAIL the command preview is empty after pressing BtnPresent ('$line')"
+            $fail++
+        } else {
+            foreach ($flag in @('--game-borderless-fullscreen', '--always-on-top',
+                                '--game-osd=compact')) {
+                if ($line.Contains($flag)) { Write-Output "PASS presentation emits $flag" }
+                else {
+                    Write-Output "FAIL presentation did not emit $flag (preview: $line)"
+                    $fail++
+                }
+            }
+            if ($line -match '--game-(saturation|contrast|brightness|gamma)=') {
+                Write-Output 'FAIL presentation left a colour grade flag on the command'
+                $fail++
+            } else {
+                Write-Output 'PASS presentation emits no colour grade flag (neutral)'
+            }
+        }
     }
 
     $langBox = ById $window 'CboLanguage'
