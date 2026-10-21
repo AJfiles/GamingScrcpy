@@ -4655,6 +4655,28 @@ correct. The working form sidesteps the separator (`unzip -p zip '*overlay_test.
 the probe now prints how many bytes it read and treats 0 bytes as a broken instrument,
 never as a statement about the package.
 
+### 5.2.7 Interim reading of the packaged run, kept as unproven
+
+The final packaged verification (`tools/package_selftest.sh`, then
+`tools/verify_all.sh`, both against the 126,572,779 B archive) was still running when
+this was written, so its verdict is **not** claimed here. What the live log already shows:
+`FAIL` lines so far **0**, and the overlay section reached its per-rep census:
+
+```
+NOTE base1.log: frames=4000 samples=4000 med=3.487ms p90=9.654ms p99=63.686ms max=1633.801ms avg=6.901ms
+NOTE over1.log: frames=3122 samples=3122 med=3.409ms p90=4.993ms p99=18.684ms max=158.967ms avg=4.192ms
+```
+
+Two things follow, and only the first is a pass. The median moved 0.078 ms with the panel
+open, which is inside the directive's budget. But the panel arm produced **3122 frames
+against the baseline's 4000**, so its p99 is the 32nd-worst of a smaller sample: the
+63.686 → 18.684 ms pair is not a like-for-like tail comparison, and the harness does not
+yet refuse it. §5.2.5 fixed *which* values get subtracted (pairing per rep); it did not
+assert that the two arms measured the **same number of frames**. Until it does, the p99
+line of this harness is evidence about these particular runs, not a contract — recorded as
+an open instrument gap rather than smoothed into the green count, and the same unequal-arm
+shape (`frames=3290`) is what made the earlier packaged run ambiguous.
+
 ## 6. What could NOT be validated here, and why
 
 
