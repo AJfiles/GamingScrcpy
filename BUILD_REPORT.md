@@ -4657,10 +4657,34 @@ never as a statement about the package.
 
 ### 5.2.7 Interim reading of the packaged run, kept as unproven
 
-The final packaged verification (`tools/package_selftest.sh`, then
-`tools/verify_all.sh`, both against the 126,572,779 B archive) was still running when
-this was written, so its verdict is **not** claimed here. What the live log already shows:
-`FAIL` lines so far **0**, and the overlay section reached its per-rep census:
+The packaged verification against the rebuilt 126,572,779 B archive **came back green**:
+`PKGSELFTEST OK (165 files, 3 dirs)` (`out/pkg_selftest_v5_final.log:364`), with the
+packaged latency A/B reaching `OVERLAY OK / rc=0` using the final instrument
+(`OK presented fps with the panel open: best pair 20.5 (mean 9.6), within 3 fps`).
+
+An earlier draft of this section read that run as a failure, and the reason is worth
+keeping: it counted `^FAIL` across the whole log and found 9. **Every one of them lives
+under a section header that says `(must FAIL)`** — the two negative-control arms, a broken
+palette (`THEME FAIL issues=7`) and a duplicated shortcut row (`SHORTCUTS FAIL issues=2`),
+each deliberately sabotaged to prove the check can still fail. The real arms printed
+`THEME OK pairs=15`, `SHORTCUTS OK rows=29 categories=4`, `FXPIXEL OK`, `ALL PROFILES
+VALID`. So a log that mixes an assertion with its own control must be read by section, not
+by grepping for the word FAIL — the same attribution rule that made §5.1b2 re-read the
+recording arm against the upstream binary. The verdict to quote is the tool's own last
+line, not a count of its diagnostic output.
+
+The one thing this run does **not** establish is a fresh full-gate number for the final
+instrument. `out/gate_v5_s0.log` (`216 passed, 0 failed`) was produced at 01:23, while the
+final `tools/overlay_test.sh` was written at 02:19-02:20, so that verdict predates the fps
+pairing correction by ~57 minutes; the chained full gate that would have covered it was
+stopped on request when this machine was handed over for manual testing, leaving a partial
+file now parked as `out/gate_v5_final.INTERRUPTED.log` rather than reported as a result.
+The evidence that the final instrument behaves is therefore the packaged `OVERLAY OK` plus
+its standalone clean runs, and a fresh full-gate pass on an idle desktop stays open.
+
+For context, the overlay section of that packaged run is the part this harness had
+historically failed at (`bash tools/overlay_test.sh` inside an extracted ZIP used to die on
+`FAIL demo harness missing` because it resolved the demo from the build tree):
 
 ```
 NOTE base1.log: frames=4000 samples=4000 med=3.487ms p90=9.654ms p99=63.686ms max=1633.801ms avg=6.901ms
