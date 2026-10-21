@@ -1246,6 +1246,20 @@ gaming_event_watch(void *userdata, SDL_Event *event) {
 // OSD
 // ---------------------------------------------------------------------------
 
+// A quiet scene really does read under 1 KB/s: a static screen encoded as AV1
+// measured 900 B/s while still presenting 30 fps (§5.1b9). On the OSD a bare 0
+// says "the stream died" to whoever is watching it, and the integer cannot tell
+// that apart from nothing having arrived. The bytes that made the figure are
+// known, so when they are not zero, say so.
+static void
+osd_rate_text(char *out, size_t n, uint32_t kbps, uint64_t window_bytes) {
+    if (!kbps && window_bytes) {
+        snprintf(out, n, "<1 KB/S");
+        return;
+    }
+    snprintf(out, n, "%u KB/S", kbps);
+}
+
 static void
 osd_recompute(struct sc_gaming *g, const SDL_FRect *content) {
     g->osd_line_count = 0;
@@ -1268,8 +1282,11 @@ osd_recompute(struct sc_gaming *g, const SDL_FRect *content) {
              "FPS %u.%u  TARGET %s",
              (unsigned) g->fps, ((unsigned) (g->fps * 10.f)) % 10,
              g->max_fps_label[0] ? g->max_fps_label : "NONE");
+    char vid[24], aud[24];
+    osd_rate_text(vid, sizeof vid, g->kbps_video, g->bytes_window_video);
+    osd_rate_text(aud, sizeof aud, g->kbps_audio, g->bytes_window_audio);
     snprintf(g->osd_lines[1], sizeof(g->osd_lines[1]),
-             "VID %u KB/S  AUD %u KB/S", g->kbps_video, g->kbps_audio);
+             "VID %s  AUD %s", vid, aud);
     snprintf(g->osd_lines[2], sizeof(g->osd_lines[2]),
              "SRC %ux%u  ON %ux%u", g->src_w, g->src_h,
              (unsigned) content->w, (unsigned) content->h);
@@ -2046,6 +2063,8 @@ sc_gaming_on_frame_rendered(struct sc_gaming *g, struct AVFrame *decoded,
                                     / (uint64_t) elapsed / 1024ULL);
         g->kbps_audio = (uint32_t) (g->bytes_audio * SC_TICK_FREQ
                                     / (uint64_t) elapsed / 1024ULL);
+        g->bytes_window_video = g->bytes_video;
+        g->bytes_window_audio = g->bytes_audio;
         g->bytes_video = 0;
         g->bytes_audio = 0;
         g->telemetry_window_start = now;
@@ -2101,12 +2120,17 @@ sc_gaming_on_frame_rendered(struct sc_gaming *g, struct AVFrame *decoded,
             }
             uint32_t worst = g->window_lat_max;
             g->window_lat_max = 0;
+            // the byte totals travel with the rates because a KB/s integer is 0
+            // for both "nothing arrived" and "900 B/s arrived", and the second
+            // one is a live picture (issue #44, measured in §5.1b9).
             LOGI("telemetry: fps=%u.%u v_kbps=%u a_kbps=%u lat=%ums "
-                 "window_max=%ums src=%ux%u",
+                 "window_max=%ums src=%ux%u v_bytes=%llu a_bytes=%llu",
                  (unsigned) g->fps, ((unsigned) (g->fps * 10.f)) % 10,
                  g->kbps_video, g->kbps_audio,
                  g->latency_known ? g->latency_ms : 0, worst,
-                 g->src_w, g->src_h);
+                 g->src_w, g->src_h,
+                 (unsigned long long) g->bytes_window_video,
+                 (unsigned long long) g->bytes_window_audio);
         }
     }
     if (output && g->vbridge) {

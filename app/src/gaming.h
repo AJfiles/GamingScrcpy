@@ -163,6 +163,12 @@ struct sc_gaming {
     sc_tick telemetry_window_start;
     uint32_t kbps_video;
     uint32_t kbps_audio;
+    // the byte totals that produced the two KB/s figures above, kept because an
+    // integer KB/s reads 0 for a scene that really is quiet (a static screen
+    // encoded as AV1 measured under 1 KB/s while presenting 30 fps), and a 0
+    // alone cannot tell "quiet" from "nothing arrived".
+    uint64_t bytes_window_video;
+    uint64_t bytes_window_audio;
     unsigned rendered_frames;
     float fps;
     sc_tick fps_window_start;

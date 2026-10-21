@@ -203,6 +203,10 @@ main(int argc, char *argv[]) {
     unsigned win_w = 0;
     unsigned win_h = 0;
     bool osd = true;
+    // --bytes-video=: the per-packet size fed to the telemetry counter. The
+    // default is a real picture; 9 makes a window quieter than 1 KB/s, which is
+    // the AV1-static case that issue #44 had to be read out of a live device.
+    size_t bytes_video = BYTES_PER_FRAME_VIDEO;
     bool sine = false;
     // per-filter values for --stats runs; the defaults keep the original
     // --fx behaviour (sharpen 60, night 40, sat 140) byte for byte
@@ -335,6 +339,12 @@ main(int argc, char *argv[]) {
             }
         } else if (!strncmp(argv[i], "--driver=", 9)) {
             driver = argv[i] + 9;
+        } else if (!strncmp(argv[i], "--bytes-video=", 14)) {
+            bytes_video = strtoull(&argv[i][14], NULL, 10);
+            if (!bytes_video) {
+                LOGE("bytes-video must be at least 1");
+                return 1;
+            }
         } else if (!strcmp(argv[i], "--no-osd")) {
             osd = false;
         } else if (!strcmp(argv[i], "--audio-sine")) {
@@ -607,7 +617,7 @@ main(int argc, char *argv[]) {
         fill_pattern(frame, i, w, h);
 
         // simulate the demuxer: packet arrival feeds bitrate + latency
-        sc_gaming_account_packet(&g, BYTES_PER_FRAME_VIDEO, true);
+        sc_gaming_account_packet(&g, bytes_video, true);
         if (af) {
             sc_pcm_tap_push(&tap, af);
         }
@@ -817,9 +827,14 @@ main(int argc, char *argv[]) {
             fclose(fp);
         }
     }
+    // the OSD line is quoted as the user would read it, and the window's byte
+    // total with it, so "0 KB/s" can be told apart from "nothing arrived"
     printf("gamingdemo: telemetry fps=%.1f latency=%u ms video=%u KB/s "
-           "audio=%u KB/s\n",
-           g.fps, g.latency_ms, g.kbps_video, g.kbps_audio);
+           "audio=%u KB/s v_bytes=%llu a_bytes=%llu osd[%s]\n",
+           g.fps, g.latency_ms, g.kbps_video, g.kbps_audio,
+           (unsigned long long) g.bytes_window_video,
+           (unsigned long long) g.bytes_window_audio,
+           g.osd_line_count > 1 ? g.osd_lines[1] : "");
 
     if (wfilter != SC_WINDOW_FILTER_OFF) {
         printf("gamingdemo: window filter %ux%u -> %ux%u, resampled=%" PRIu64
