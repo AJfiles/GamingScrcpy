@@ -1,3 +1,36 @@
+# GamingScrcpy — fork de [scrcpy](https://github.com/Genymobile/scrcpy) 5.0.1
+
+> **Esto no es scrcpy oficial.** Es un fork de terceros, con fines de juego, sobre la
+> etiqueta `v5.0.1`. El único source oficial de scrcpy sigue siendo
+> <https://github.com/Genymobile/scrcpy>, y nada de aquí está avalado por sus autores.
+>
+> **Qué añade:** un motor de post-efectos en el cliente C (escala Lanczos/bicúbica,
+> contraste/brillo/gamma/saturación, nitidez, OSD de telemetría, puente de vídeo y de
+> audio PCM por named pipe, panel de filtros superpuesto, ventana sin bordes) y un
+> lanzador WPF para Windows con 7 pestañas, 20 perfiles integrados, ES/EN en caliente
+> y registro de sesiones. Lo medido, lo probado y lo que **no** se ha podido probar
+> están en [`BUILD_REPORT.md`](BUILD_REPORT.md); el uso, en
+> [`README_GAMING.md`](README_GAMING.md); el linaje y las licencias, en
+> [`PROVENANCE.md`](PROVENANCE.md) y [`NOTICE`](NOTICE).
+>
+> **Descarga:** [Releases](https://github.com/AJfiles/GamingScrcpy/releases) trae el ZIP
+> win64 autocontenido y su `SHA256SUMS.txt`. Los binarios **no** están firmados: Windows
+> mostrará el aviso de SmartScreen; comprueba el hash antes de ejecutar.
+>
+> **This is not official scrcpy.** It is a third-party gaming fork of the `v5.0.1` tag;
+> the official source remains <https://github.com/Genymobile/scrcpy> and nothing here is
+> endorsed by its authors. It adds a host-side effects engine to the C client (Lanczos /
+> bicubic upscaling, contrast/brightness/gamma/saturation, sharpening, a telemetry OSD,
+> video and decoded-PCM audio bridges over named pipes, an overlay filter panel,
+> borderless fullscreen) plus a 7-tab Windows WPF launcher with 20 built-in profiles,
+> live ES/EN switching and session logging. Measurements and open limitations are in
+> [`BUILD_REPORT.md`](BUILD_REPORT.md), usage in [`README_GAMING.md`](README_GAMING.md),
+> lineage and licences in [`PROVENANCE.md`](PROVENANCE.md) and [`NOTICE`](NOTICE).
+> Releases carry the self-contained win64 ZIP and `SHA256SUMS.txt`; the binaries are
+> **unsigned**, so SmartScreen will warn — verify the hash before running.
+
+---
+
 > [!WARNING]
 > **This GitHub repo (<https://github.com/Genymobile/scrcpy>) is the only official
 source for the project. Do not download releases from random websites, even if
