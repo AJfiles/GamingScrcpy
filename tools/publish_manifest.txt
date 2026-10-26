@@ -43,6 +43,7 @@ tools/launcher_session_probe.ps1
 tools/launcher_shot.ps1
 tools/launcher_tab_shot.ps1
 tools/launcher_uiauto.ps1
+tools/layout.sh
 tools/make_app_icon.ps1
 tools/overlay_test.sh
 tools/package_selftest.sh
