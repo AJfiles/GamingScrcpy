@@ -41,7 +41,7 @@ which failed there (`FAIL only 1 adb children in 24s`) for the instrument reason
 green |
 | Regression suite | `tools\verify_all.sh` | **151 passed, 0 failed** in the last full run, executed with the moto g(7) power attached (`out\gate_v3_pr5.log` — 145 of those lines were already green at §5.1al and the 6 new ones are section 20, the theme audit: single accent, radius range, no symbol glyphs, a keyboard-focus trigger in the templates, 15 measured contrast pairs and its broken-palette positive control; §5.1am); gate §16 SKIPs here because no Android 11+ device is attached. The total moves by a couple of lines between runs **on purpose**: the bench emits one PASS per measured attempt (a quiet machine needs only one), the recorder check emits one line per case it can build, and two sections SKIP without a phone — so a fixed "N checks" number would be wrong more often than it is right |
 | Fixed defect (v4) | `--game-borderless-fullscreen` | Was: the window did not end up work-area sized at startup (`313x671` on a `1366x768` desktop). Two upstream owners found by measurement — `sc_screen_show_initial_window()` fits the window to the video, then the aspect-ratio lock clamps the width to the video aspect (`358x768`). Now re-asserted and unlocked while the mode is on: the flag arm measures `1366x768+0+0`, `popup=1`, against a `329x710`, `popup=0` control (`tools/borderless_probe.ps1`, §5.1b5 → §5.1b7). The picture is letterboxed; touch mapping through that letterbox still needs the owner's eyes (README §7 item 4). |
-| Docs | `README_GAMING.md`, `PHASE1_AUDIT.md`, this file | — |
+| Docs | `README_GAMING.md`, `doc/gaming/PHASE1_AUDIT.md`, this file | — |
 
 ## 2. Toolchain actually used
 
@@ -58,7 +58,7 @@ green |
 | JDK (not used for the final server) | 19.0.2 |
 
 The brief claimed `meson`, `ninja`, `adb` and Python 3.12 were already present;
-they were not — see `PHASE1_AUDIT.md` §1 for the audit table and the bootstrap
+they were not — see `doc/gaming/PHASE1_AUDIT.md` §1 for the audit table and the bootstrap
 that had to be done first.
 
 ## 3. Builds
@@ -71,7 +71,7 @@ ninja -C build-x        # 77/77 targets, exit 0
 ```
 
 `scrcpy.exe` (523,125 bytes) ran and reported its dependency versions. Three
-configuration iterations were needed and are documented in `PHASE1_AUDIT.md`
+configuration iterations were needed and are documented in `doc/gaming/PHASE1_AUDIT.md`
 §4 (wrong source dir, `usb` is boolean not feature, `libusb-1.0` missing).
 The new `app/src/gaming.{c,h}` files existed on disk during this build but were
 not in the Meson source list, so the baseline is genuinely stock.
@@ -772,11 +772,24 @@ provable here remains the device's own capture latency (§6).
 
 ### 5.1l First run against real hardware (Lenovo TB-9707F)
 
-A device was finally connected (USB, `<dev-id-1>`: Lenovo TB-9707F, SM8550,
+A device was finally connected (USB, `DEV-T`: Lenovo TB-9707F, SM8550,
 Android 14 / SDK 34, arm64-v8a; the tablet's own display mode is 1080x2316 at
 411 dpi, which nothing in this session changed). Running the packaged build
 against it replaced several "cannot be verified here" notes with measurements —
 and exposed two packaging defects that no host-only test could see.
+
+> **Identifier disambiguation, corrected 2026-10-26.** This section and the S23 Ultra
+> sections carry the *same* device identifier, and the saved machine output shows why
+> that cannot be resolved by serial: one adb entry announces two different models —
+> `device Lenovo_TB_9707F` with `[server] INFO: Device: [samsung] lenovo Lenovo
+> TB-9707F (Android 14)` at `out/dev/cmp-h264.log:4,6`, against `device SM_S918B` at
+> `out/s23_latency_v4.log:6`. The serial is therefore not a device key on this bench,
+> and the model string the device reports is what each measurement is about. This
+> section is labelled `DEV-T` (announced as Lenovo TB-9707F) and every S23 section keeps
+> `DEV-A` (announced as SM-S918B); the identifier string itself is kept out of this file
+> on purpose and the alias→identifier table lives in `out/publish/device_alias_map.txt`,
+> outside the published set. Nothing measured was re-assigned: a number produced while
+> the tablet label was in effect stays with this section.
 
 Verified on hardware:
 
@@ -835,9 +848,9 @@ presses *Mirror*, inspects the child process the launcher spawned, then presses
 *Stop*:
 
 ```
-RESULT detect badge='1 device(s)' serial=<dev-id-1>
+RESULT detect badge='1 device(s)' serial=DEV-A
 RESULT mirror pid=17752 title='4K Ultra Quality Stream 60FPS'
-RESULT args=--serial=<dev-id-1> present
+RESULT args=--serial=DEV-A present
 RESULT stop scrcpy exited cleanly
 ```
 
@@ -892,7 +905,7 @@ Mbps, `--max-fps=60`, direct3d11:
 
 #### Re-measured on the S23 Ultra (v4 §6.3) — the new baseline
 
-`tools/s23_latency_audio.sh`, `<dev-id-1>` (SM-S918B), 3 reps × 12 s per arm,
+`tools/s23_latency_audio.sh`, `DEV-A` (SM-S918B), 3 reps × 12 s per arm,
 every `lat=` sample pooled and judged by percentiles; host-side recv→present,
 the same quantity as above. Native 2316x1080 unless the row says otherwise.
 Logs: `out/s23/latency_audio2.log`.
@@ -1581,7 +1594,7 @@ used to launch, and section 11 proves a session starts from it.
 
 ### 5.1z A second device: the same harnesses on a Motorola, and what changed
 
-The Lenovo tablet was swapped for a **moto g(7) power** (serial `<dev-id-2>`,
+The Lenovo tablet was swapped for a **moto g(7) power** (serial `DEV-B`,
 `ro.product.model` read with `adb shell getprop`, native mirror **720x1520**).
 Nothing in the harnesses names a device, so the same scripts ran unmodified --
 which is the point of writing them as probes rather than as one-off commands.
@@ -1633,7 +1646,7 @@ run-log panel through UI Automation showed the real sequence:
 
 ```
 [02:45:46] no AV1 encoder on SDK 28: switched to h264 so the session can start
-[02:45:46] launching: --serial=<dev-id-2> --video-codec=h264 ...
+[02:45:46] launching: --serial=DEV-B --video-codec=h264 ...
 [02:45:47] [server] INFO: Device: [motorola] motorola moto g(7) power (Android 9)
 [02:45:47] ! [server] WARN: Audio disabled: it is not supported before Android 11
 [02:45:48] INFO: Texture (D3D11VA): 720x1520
@@ -1668,7 +1681,7 @@ AV1 packaging, not a per-device guarantee -- an Android 10 device can still lack
 an AV1 *encoder*, and the only infallible probe is `dumpsys media.codec`, which
 is a much bigger parse. The downgrade removes the silent-nothing failure, not
 every possible codec mismatch. Verified: section 11 now reports
-`args=--serial=<dev-id-2> present`, `title='4K Ultra Quality Stream 60FPS'` and
+`args=--serial=DEV-B present`, `title='4K Ultra Quality Stream 60FPS'` and
 a clean stop on the Motorola.
 
 ### 5.1ab Gate section 11 blamed the launcher again, but this time the phone was at fault
@@ -1893,7 +1906,7 @@ real binary instead of reading them.
 
 Directive v3 §9 asks for evidence before code. This section is that evidence plus
 the seven-step plan. Everything here was measured on 2026-10-17 on this host with
-the **moto g(7) power** (serial `<dev-id-2>`) attached; the commands are in
+the **moto g(7) power** (serial `DEV-B`) attached; the commands are in
 `out/dev/adb_audit.log`, the probe is `out/v3_preflight_probe.ps1` (scratch, not
 shipped) and the pictures are `out/shots/v3_*.png`. v3's evidence continues the
 §5.1a-§5.1ab run rather than taking the §5.2 number the directive suggested,
@@ -1958,7 +1971,7 @@ quoted map to the real labels `Dispositivo detectado` (`LblDevice`) and
 `Emparejar inalámbrico` (`BtnPair`).
 
 `out/shots/v3_header_overlap.png` (1260 px) shows the first stage: the combo
-reads `USB <dev-id-2> (moto g(7) power` and the button behind it is cut to
+reads `USB DEV-B (moto g(7) power` and the button behind it is cut to
 `anear ADB`. At 940 px (`out/shots/v3_shortcuts_msgbox.png`) it is `…nbrico` and
 `Conectar ippuerto`. The same pictures show two more defects in the same window
 that v3 should fix while it is in there:
@@ -2088,7 +2101,7 @@ part of this test):
 
 | State | 1380 | 1200 | 1120 (=min) | 1000 (forced) | 940 (forced) |
 |---|---|---|---|---|---|
-| connected (`<dev-id-2>`) | clean | clean | clean | clean | clean |
+| connected (`DEV-B`) | clean | clean | clean | clean | clean |
 | no device | clean | — | clean | clean | clean |
 
 `out/shots/v3_header_connected.png`, `v3_header_no_device.png` (both 1380 px, top
@@ -2100,7 +2113,7 @@ Gate after the change (`out/gate_v3_pr2.log`, 2026-10-17, phone attached):
 added no checks, only kept the existing ones green. §10 still finds every control
 by `AutomationId` after the redesign (`91 configurator controls present in the
 running window`), §11 drove the real device to a mirror window with
-`--serial=<dev-id-2>` present and stopped cleanly **with no retry** (the earlier
+`--serial=DEV-B` present and stopped cleanly **with no retry** (the earlier
 standalone run did need one, the Android 9 MediaCodec settle of §5.1ab), and §15
 grew from 223 to **225 unique Loc keys** with the two new summary strings present
 in both languages.
@@ -2159,7 +2172,7 @@ and, forced onto the Android 9 phone with `-MinSdk 28` so the assertion itself i
 tested rather than trusted:
 
 ```
-DEVICE <dev-id-2> sdk=28
+DEVICE DEV-B sdk=28
 FAIL PCM tap got 0 bytes (expected a live stream)
 AUDIO-E2E FAIL issues=1
 ```
@@ -2199,7 +2212,7 @@ OK
 i.e. the documented "desktop still busy" family (§8 already retries once for
 exactly this reason), not a regression: the whole suite re-run with nothing else
 open (`out/gate_v3_pr3.clean.log`) is **137 passed, 0 failed**, §16 SKIP, with
-§11 again driving the real phone (`mirror pid=…`, `--serial=<dev-id-2> present`,
+§11 again driving the real phone (`mirror pid=…`, `--serial=DEV-B present`,
 `stop scrcpy exited cleanly`) and §13/§14 green. The two quoted evidence files
 are kept so the claims are re-readable, not just asserted: `out/v3_audio_probe.log`
 (`AUDIO-PROBE OK`: the badge string, the six `DISABLED` controls with tooltips,
@@ -2773,7 +2786,7 @@ The scan is the same read the button performs: `adb devices` plus the read-only
 
 The user's report was: another device, several profiles, the mirror stays grey,
 then the window goes "No responde" and has to be killed. v4 §1.2 forbids touching
-code before that is measured, so the S23 Ultra (`<dev-id-1>`, SM-S918B, Android 14,
+code before that is measured, so the S23 Ultra (`DEV-A`, SM-S918B, Android 14,
 SDK 34, `real 1440 x 3088`, `mWakefulness=Awake` at the start of every probe) got
 wired to the protocol with an instrument instead of an eye: `tools/gray_probe.ps1`
 captures the window with `PrintWindow`, and classifies it from the numbers —
@@ -2838,7 +2851,7 @@ client should survive a writer that cannot write instead of stopping the render 
 
 ### 5.1ar. v4 §1.3 — the fix that shipped: the panel window is built on first show, and a watchdog ends any session that never paints
 
-Root cause, established by bisection on the S23 Ultra (`<dev-id-1>`,
+Root cause, established by bisection on the S23 Ultra (`DEV-A`,
 `out/bug_gray/bisect.sh` drop-one table): starting a session with the filter
 panel enabled makes the client never present a first frame. Measured with
 `--game-telemetry-log`, which prints one line per second of *painted* video:
@@ -2892,7 +2905,7 @@ startup; the hotkey does, once the session is painting.
 
 ### 5.1as. v4 §6.1 — S23 Ultra matrix: every codec and renderer paints, and two findings
 
-`tools/s23_matrix.sh` runs each arm for 10 s against `<dev-id-1>` and judges
+`tools/s23_matrix.sh` runs each arm for 10 s against `DEV-A` and judges
 "se ve" by presented frames (`telemetry:` lines, 1/s), not by a human glance.
 Logs: `out/s23/`.
 
@@ -2932,7 +2945,7 @@ and the new baseline, and §5.1at carries the audio, tap and recording arms.
 
 ### 5.1at. v4 §6.2 — what the S23 Ultra says about audio, and the real bug it exposed
 
-Measured by `tools/s23_latency_audio.sh` against `<dev-id-1>`; logs in
+Measured by `tools/s23_latency_audio.sh` against `DEV-A`; logs in
 `out/s23/`.
 
 * **Both codecs produce a real audio track, and both tracks are silent.**
@@ -2971,7 +2984,7 @@ Measured by `tools/s23_latency_audio.sh` against `<dev-id-1>`; logs in
 §6.1 asks for `--game-audio-pcm=\\.\pipe\pcm_test → recibe bytes reales`. The
 first three runs of the TAP arm reported `-1`, then `no consumer`, then "a real
 bug in the scrcpy wiring" (§5.1at). None of that was the fork. With the harness
-fixed, the packaged client on `<dev-id-1>` produced:
+fixed, the packaged client on `DEV-A` produced:
 
 ```
 INFO: pcm tap: raw bytes -> \\.\pipe\gsc_pcm_probe
@@ -3082,7 +3095,7 @@ answer a close request. The command lines come from the launcher itself
 (`--dump-profile-args`, one `ARG` line per token so a two-word `--window-title`
 survives); nothing is transcribed into the harness.
 
-Run on the moto g(7) power (`<dev-id-2>`, Android 9 / SDK 28) after the S23 Ultra
+Run on the moto g(7) power (`DEV-B`, Android 9 / SDK 28) after the S23 Ultra
 was unplugged, 10 s per profile, panel dark and locked so `scene=static`:
 
 ```
@@ -3272,7 +3285,7 @@ in the executable". Those are three different Windows mechanisms, so
 screenshot. Verbatim run against the published exe:
 
 ```
-note exe: <repo>\dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe
+note exe: <repo root>\dist\GamingScrcpy\launcher\GamingScrcpyLauncher.exe
 note app.ico: type=1 entries=7 sizes=16,24,32,48,64,128,256
 OK   7 resolutions embedded
 OK   resolution 16 present
@@ -3523,7 +3536,7 @@ below, and they say the opposite of what v4 §6.3 expected.
 
 ### 5.1b0. v4 §6 — the S23 Ultra re-attached, and what it could and could not answer
 
-The Samsung (`<dev-id-1>`, reported by the client as `samsung SM-S918B (Android
+The Samsung (`DEV-A`, reported by the client as `samsung SM-S918B (Android
 14)`, so SDK 34) was attached again while §4 was being packaged, so both device
 harnesses ran against it. Read `out/s23_matrix_v4.log` and `out/s23_latency_v4.log`
 for the raw output; what follows is what those numbers do and do not say.
@@ -3727,7 +3740,7 @@ Android-14 capture and then asked FFmpeg to decode the whole file, which is what
 this arm does. Tracked as its own task, with the reproduction command:
 
 ```
-dist/GamingScrcpy/scrcpy/scrcpy.exe --serial=<dev-id-1> --video-codec=h264 \
+dist/GamingScrcpy/scrcpy/scrcpy.exe --serial=DEV-A --video-codec=h264 \
     --max-size=1080 --max-fps=120 --video-bit-rate=30M --record=out/rec.mp4
 # stop with the window close (not a kill: the moov atom is written on exit), then
 ffmpeg -hide_banner -v error -i out/rec.mp4 -f null -
@@ -3735,7 +3748,7 @@ ffmpeg -hide_banner -v error -i out/rec.mp4 -f null -
 
 ### 5.1b3. v4 §6.1 — the recording arm's criterion replaced, and the complaint shown to be the harness's own
 
-Three 12 s sessions on the S23 (`<dev-id-1>`, all ending by their own
+Three 12 s sessions on the S23 (`DEV-A`, all ending by their own
 `--time-limit` so the recorder closes cleanly; logged in `out/dev/adb_audit.log`,
 files kept in `out/probe/`) settle §5.1b2's open question — and retract its
 explanation. Each file was measured with three instruments: the whole-file
@@ -3973,7 +3986,7 @@ tools/`.
 
 ### 5.1b5. v4 §7 — `--game-borderless-fullscreen` goes borderless but not fullscreen
 
-Measured on the S23 Ultra (`<dev-id-1>`) with the packaged client, one 12 s
+Measured on the S23 Ultra (`DEV-A`) with the packaged client, one 12 s
 session, the Win32 state read out of the live window by
 `tools/window_style_probe.ps1` (host display work area `0,0 1366x768`):
 
@@ -4217,7 +4230,7 @@ Two honesty notes, both in the shipped text:
 
 `tools/borderless_probe.ps1` also had a false negative of its own: it enumerated
 devices only when `-Adb` was passed, and adb is not on PATH in this project, so it
-printed `BORDERLESS SKIP no device attached` while `<dev-id-1> device` was
+printed `BORDERLESS SKIP no device attached` while `DEV-A device` was
 plugged in. It now resolves the packaged `adb.exe` in both layouts (repo and
 package) before deciding to SKIP, and the SKIP line prints which adb it probed
 with. A harness that cannot see the hardware it is guarding is the same class of
@@ -4296,7 +4309,7 @@ files on disk and none of them reads the archive's directory structure.
 ### 5.1b8. v4 closing audit — every directive item against its own evidence
 
 One table for the whole of directive v4, built from `out/dev/verify_v4_step10d.log`
-(**215 passed, 0 failed**, S23 Ultra `<dev-id-1>` attached, desktop idle, nothing
+(**215 passed, 0 failed**, S23 Ultra `DEV-A` attached, desktop idle, nothing
 run concurrently) and `out/dev/pkgselftest_step10.log`. Nothing in the right-hand
 column is a summary of intent: each entry is a gate line, a harness verdict or a
 file in `out/dev/`.
@@ -4315,7 +4328,7 @@ file in `out/dev/`.
 | §5.1/§5.2 depth hierarchy, shadows, animations | closed except one documented item | gate §23 reduced motion (every duration comes from a key the code can zero), §24 `pass=7 fail=0` with the 500 ms fixture caught; the overlay's scale-from-0.95 is recorded as **not implemented** with its reason |
 | §5.3 one icon set, no emojis | closed | gate §20 (`theme_audit`) plus the emoji scan |
 | §6.1 mirror codecs / renderers on the S23 | closed | §12's four arms all produced pictures: `h264/baseline`, `h264/lowlat`, `h265/baseline`, `h265/lowlat`, each `src=2316x1080` with `fps_med` 59.7–59.9 |
-| §6.1 Tap PCM, profiles launch, 60 s stability, overlay, recording | closed | the PCM tap byte count, §11's real launch/stop (`title='1440p 60'`, `--serial=<dev-id-1> present`, clean exit), §18's paired latency census, and the 60 s recording decode check (§5.1b3) |
+| §6.1 Tap PCM, profiles launch, 60 s stability, overlay, recording | closed | the PCM tap byte count, §11's real launch/stop (`title='1440p 60'`, `--serial=DEV-A present`, clean exit), §18's paired latency census, and the 60 s recording decode check (§5.1b3) |
 | §6.1 "Mirror con av1 → se ve" | measured, usable for recording only | the arm decoded and displayed for the whole session (`out/dev/mirror_av1_step11.log`, exit 0 after `--time-limit=20`), but at `lat_med=1369 ms` against `17–30 ms` for h264 (§5.1b9) |
 | §6.1 "Mirror con opengl / vulkan" | measured earlier | both present, 5–30× slower than `direct3d11` on this host (§5.1n's render-driver sweep); neither produces grey |
 | §6.1 "audio suena en PC" (both boxes) | **open, owner** | needs ears in the room; the fork cannot prove audibility and starting media on the phone is forbidden |
@@ -4475,7 +4488,7 @@ what it saw:
   `--no-playback`, which never presents a frame. It reports
   `telemetry=0 … FAIL control: the mirror never painted` and the control exits 0.
 
-Run on the Motorola (`<dev-id-2>`, Android 9), idle desktop, after the change:
+Run on the Motorola (`DEV-B`, Android 9), idle desktop, after the change:
 
 ```
 note  panel-hidden    alive=alive after=8s telemetry=1 best_fps=10.0 stall_lines=0
@@ -4516,7 +4529,7 @@ RESULT h265/baseline src=720x1520 scene=live seconds=17 fps_med=31.6 v_kbps_med=
        telemetry-summary: seconds=17 lat_med=415ms lat_p90=1046ms lat_p99=1698ms
 RESULT h265/lowlat   src=720x1520 scene=live seconds=17 fps_med=32.8 v_kbps_med=1129
        telemetry-summary: seconds=17 lat_med=109ms lat_p90=1128ms lat_p99=1538ms
-RESULT serial=<dev-id-2>
+RESULT serial=DEV-B
 OK
 ```
 

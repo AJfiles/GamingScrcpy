@@ -29,7 +29,7 @@ dist\GamingScrcpy\
 │   swresample-7.dll, swscale-10.dll, …   full transitive dependency set
 │   adb.exe, AdbWin*.dll
 ├─ tools\                         the validation scripts (§7, §8, BUILD_REPORT §5)
-├─ README_GAMING.md, BUILD_REPORT.md, PHASE1_AUDIT.md
+├─ README_GAMING.md, BUILD_REPORT.md, doc/gaming/PHASE1_AUDIT.md
 ```
 
 `bash tools/recorder_integrity_test.sh` from an extracted package passes with no

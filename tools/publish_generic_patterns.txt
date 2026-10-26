@@ -1,0 +1,8 @@
+# Literal strings that must not appear in published files. Matched with grep -F, so
+# backslashes mean backslashes and this list cannot rot into a regex that silently
+# matches nothing (it did once: C:\\Users\\... written into an ERE became C:Users...).
+# Machine paths only — the device identifiers live in out/publish/forbidden_patterns.txt
+# so that a clone does not carry the keys it is supposed to have scrubbed.
+C:\Users\Administrator
+ADMINI~1
+C:/Users/Administrator

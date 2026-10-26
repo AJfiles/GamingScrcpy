@@ -1,13 +1,14 @@
 $ErrorActionPreference = 'Continue'
+$root = Split-Path -Parent $PSScriptRoot   # repo root: runs from any clone
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-$demo = 'C:\Users\Administrator\Desktop\GamingCapture\workspace\scrcpy\build-usb\app\gamingdemo.exe'
+$demo = Join-Path $root 'workspace\scrcpy\build-usb\app\gamingdemo.exe'
 $env:PATH = 'C:\msys64\ucrt64\bin;' + $env:PATH
 $frameBytes = 640 * 360 * 4
 
 
 Write-Output "=== CASE A: consumer already listening ==="
-$loga = 'C:\Users\Administrator\Desktop\GamingCapture\out\pipe_a.txt'
+$loga = Join-Path $root 'out\pipe_a.txt'
 Remove-Item $loga -ErrorAction SilentlyContinue
 $job = Start-Job -ScriptBlock {
   param($name, $log)
@@ -43,9 +44,9 @@ $elapsedB = ((Get-Date) - $t1).TotalSeconds
 Write-Output ("run with no consumer took {0:N1}s wall clock (init must NOT block 10s)" -f $elapsedB)
 
 Write-Output "=== CASE C: consumer joins 2s AFTER the bridge started ==="
-$logc = 'C:\Users\Administrator\Desktop\GamingCapture\out\pipe_c.txt'
+$logc = Join-Path $root 'out\pipe_c.txt'
 Remove-Item $logc -ErrorAction SilentlyContinue
-$demoOut = 'C:\Users\Administrator\Desktop\GamingCapture\out\pipe_c.log'
+$demoOut = Join-Path $root 'out\pipe_c.log'
 $producer = Start-Job -ScriptBlock {
   param($demo, $out)
   $env:PATH = 'C:\msys64\ucrt64\bin;' + $env:PATH

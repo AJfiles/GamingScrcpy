@@ -1,0 +1,24 @@
+GamingScrcpy
+Copyright 2026 the GamingScrcpy author
+
+This product includes software developed at
+Genymobile (https://genymobile.com/) — scrcpy, licensed under Apache License 2.0.
+
+GamingScrcpy is a derivative work of scrcpy 5.0.1. The modified client sources
+(`app/src/gaming.c`, `app/src/overlay.c`, and the edits to `app/src/cli.c`,
+`app/src/screen.c`, `app/src/scrcpy.c`, `app/src/recorder.c`, `app/src/demuxer.c`
+and `app/meson.build`) are upstream code changed by us; the unmodified remainder of
+the scrcpy tree is upstream's and stays under its original licence.
+
+  Upstream repository : https://github.com/Genymobile/scrcpy.git
+  Upstream base       : tag v5.0.1, commit a60891aea193d92e7e5c3942700eca63f9d19a5f
+  Our commits on top  : cd91ccf, 47072dd, c1d2a77, 8c7e55c, f6f931b
+  Measured delta      : 14 files changed, 6566 insertions(+), 16 deletions(-)
+
+The launcher (`launcher/`, C# WPF on .NET 8), the verification harnesses (`tools/`)
+and the documentation written for this project are ours and are distributed under
+the same Apache License 2.0 as scrcpy, with the third-party components listed in
+THIRD-PARTY.md.
+
+Neither Genymobile nor the scrcpy authors endorse, and we do not claim, any
+affiliation with them. The name "scrcpy" and its logo belong to Genymobile.

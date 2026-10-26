@@ -25,7 +25,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 client="$root/dist/GamingScrcpy/scrcpy/scrcpy.exe"
-adbwin='C:\Users\Administrator\Desktop\GamingCapture\dist\GamingScrcpy\scrcpy\adb.exe'
+adbwin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/dist/GamingScrcpy/scrcpy/adb.exe"
 SECS="${1:-14}"
 STAGE="${2:-all}"
 

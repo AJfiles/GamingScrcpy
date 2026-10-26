@@ -1,6 +1,6 @@
 # PHASE 1 — Environment Audit & Stock Compilation
 
-Date: 2026-10-16 (host local) · Host: Windows 10 22H2 (10.0.19045) x64 · Working dir: `<repo>`
+Date: 2026-10-16 (host local) · Host: Windows 10 22H2 (10.0.19045) x64 · Working dir: the repository root (this project was first built under `Desktop/GamingCapture`, which is not part of the published layout)
 
 ## 1. Premise correction (important)
 
@@ -41,12 +41,12 @@ Compiler actually used: **MinGW-w64 (UCRT64) GCC** — MSVC/Visual Studio is not
 
 Findings that change assumptions in the brief:
 
-- **The client uses SDL3, not SDL2** (`app/src/screen.c` includes `<SDL3/SDL.h>`; the official release ships `SDL3.dll`). Renderer creation is the SDL3 single-argument form `SDL_CreateRenderer(window, NULL)` ([screen.c:616](file:///<repo>/workspace/scrcpy/app/src/screen.c#L616)); the backend is selected by the `SDL_HINT_RENDER_DRIVER` hint set in `sdl_hints.c` and driven by `--rendering-driver` (so `direct3d11`, `opengl`, `vulkan` are chosen that way, not by renderer flags).
-- **There is no OpenGL shader pipeline for presentation.** The frame is drawn with `SDL_RenderTexture` / `SDL_RenderTextureRotated` inside `sc_screen_render()` ([screen.c:259-344](file:///<repo>/workspace/scrcpy/app/src/screen.c#L259-L344)). Upscale quality is therefore controlled by the texture scale mode + mipmaps, not by a filter kernel you can swap. Any pixel-shader-style work has to happen on the host `AVFrame` (CPU) or in an SDLGPU path that does not exist upstream.
+- **The client uses SDL3, not SDL2** (`app/src/screen.c` includes `<SDL3/SDL.h>`; the official release ships `SDL3.dll`). Renderer creation is the SDL3 single-argument form `SDL_CreateRenderer(window, NULL)` ([screen.c:616](workspace/scrcpy/app/src/screen.c#L616)); the backend is selected by the `SDL_HINT_RENDER_DRIVER` hint set in `sdl_hints.c` and driven by `--rendering-driver` (so `direct3d11`, `opengl`, `vulkan` are chosen that way, not by renderer flags).
+- **There is no OpenGL shader pipeline for presentation.** The frame is drawn with `SDL_RenderTexture` / `SDL_RenderTextureRotated` inside `sc_screen_render()` ([screen.c:259-344](workspace/scrcpy/app/src/screen.c#L259-L344)). Upscale quality is therefore controlled by the texture scale mode + mipmaps, not by a filter kernel you can swap. Any pixel-shader-style work has to happen on the host `AVFrame` (CPU) or in an SDLGPU path that does not exist upstream.
 - **No text OSD exists.** `--show-fps` only logs to the console (`fps_counter.c`); `icon.c` is a PNG loader for the disconnected-state icon. A gaming telemetry overlay must be implemented from scratch (SDL3 has no bundled text API).
 - **`--mute-device` does not exist in v5.0.1**; device-speaker muting during audio forwarding is reached through `--audio-source=playback` / `--no-audio-playback`. Host audio routing to external sinks must be built.
-- `struct scrcpy_options` ([options.h:265-376](file:///<repo>/workspace/scrcpy/app/src/options.h#L265-L376)) already exposes everything the brief asks the recorder to control: `video_codec` (h264/h265/av1), `video_bit_rate`, `max_fps`, `record_format` (mp4/mkv), `audio_codec`, `video_buffer`, `audio_buffer`, `render_fit`, `mipmaps`, `render_driver`, `hwdec_mode`. Recording runs as a parallel packet sink next to the display, so "dual recording mode" (file + live mirror) is native, and device packets are **muxed without re-encoding** (zero extra host latency).
-- The CLI is a `struct sc_option options[]` table + `getopt_long` switch ([cli.c:22-127](file:///<repo>/workspace/scrcpy/app/src/cli.c#L22-L127)); help text is generated from that table, so new flags are added in three places (enum id, table entry, parse case).
+- `struct scrcpy_options` ([options.h:265-376](workspace/scrcpy/app/src/options.h#L265-L376)) already exposes everything the brief asks the recorder to control: `video_codec` (h264/h265/av1), `video_bit_rate`, `max_fps`, `record_format` (mp4/mkv), `audio_codec`, `video_buffer`, `audio_buffer`, `render_fit`, `mipmaps`, `render_driver`, `hwdec_mode`. Recording runs as a parallel packet sink next to the display, so "dual recording mode" (file + live mirror) is native, and device packets are **muxed without re-encoding** (zero extra host latency).
+- The CLI is a `struct sc_option options[]` table + `getopt_long` switch ([cli.c:22-127](workspace/scrcpy/app/src/cli.c#L22-L127)); help text is generated from that table, so new flags are added in three places (enum id, table entry, parse case).
 - The Meson **project root is the repository root**, not `app/` (`app/meson.build` is pulled in by the top-level `meson.build`). Running `meson setup` inside `app/` fails with "Not the project root".
 
 ## 4. Stock build result

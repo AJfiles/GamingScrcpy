@@ -14,7 +14,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 client="$root/dist/GamingScrcpy/scrcpy/scrcpy.exe"
-adbwin='C:\Users\Administrator\Desktop\GamingCapture\dist\GamingScrcpy\scrcpy\adb.exe'
+adbwin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/dist/GamingScrcpy/scrcpy/adb.exe"
 # every device command lands in out/dev/adb_audit.log for the owner to review
 audit() { bash "$here/adb_audit.sh" "$*"; }
 audit "adb devices"

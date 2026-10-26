@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Continue'
-$demo = 'C:\Users\Administrator\Desktop\GamingCapture\workspace\scrcpy\build-usb\app\gamingdemo.exe'
-$out  = 'C:\Users\Administrator\Desktop\GamingCapture\out\audio_demo.log'
-$log  = 'C:\Users\Administrator\Desktop\GamingCapture\out\audio_pipe.txt'
+$root = Split-Path -Parent $PSScriptRoot   # repo root: runs from any clone
+$demo = Join-Path $root 'workspace\scrcpy\build-usb\app\gamingdemo.exe'
+$out  = Join-Path $root 'out\audio_demo.log'
+$log  = Join-Path $root 'out\audio_pipe.txt'
 Remove-Item $out, $log -ErrorAction SilentlyContinue
 
 $consumer = Start-Job -ScriptBlock {

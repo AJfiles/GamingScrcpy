@@ -9,8 +9,9 @@ $ErrorActionPreference = 'Continue'
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools/pcm_tap_pipe_test.ps1
 
-$demo = 'C:\Users\Administrator\Desktop\GamingCapture\workspace\scrcpy\build-usb\app\gamingdemo.exe'
-$dir  = 'C:\Users\Administrator\Desktop\GamingCapture\out'
+$root = Split-Path -Parent $PSScriptRoot   # repo root: runs from any clone
+$demo = Join-Path $root 'workspace\scrcpy\build-usb\app\gamingdemo.exe'
+$dir  = Join-Path $root 'out'
 $out  = Join-Path $dir 'pcm_pipe_demo.log'
 $raw  = Join-Path $dir 'pcm_pipe.raw'
 $log  = Join-Path $dir 'pcm_pipe.txt'
