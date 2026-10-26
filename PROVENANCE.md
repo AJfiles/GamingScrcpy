@@ -8,36 +8,55 @@ to the artifact that produced it after history is rewritten.
 
 ```
 Genymobile/scrcpy  tag v5.0.1  =  a60891aea193d92e7e5c3942700eca63f9d19a5f   (Apache-2.0)
-  └─ cd91ccf  GamingScrcpy fork: host-side gaming engine plus the real-time filter panel
-     47072dd  overlay: build the panel window on first show, add the stall watchdog
-     c1d2a77  overlay: fade the filter panel in over 120 ms, on the OS's terms
-     8c7e55c  borderless: re-assert the display geometry past both upstream owners
-     f6f931b  telemetry: stop a quiet scene from reading as a dead stream
+  └─ 597ff27  GamingScrcpy fork: host-side gaming engine plus the real-time filter panel
+     4240c72  overlay: build the panel window on first show, add the stall watchdog
+     93fa33a  overlay: fade the filter panel in over 120 ms, on the OS's terms
+     5ec5249  borderless: re-assert the display geometry past both upstream owners
+     7d93556  telemetry: stop a quiet scene from reading as a dead stream
+     + 49 further commits: the launcher, the harnesses, the documentation
 ```
 
-Those five commits are the whole C-side change: **14 files, +6566 / −16** (`git diff
---stat v5.0.1..HEAD` in the scrcpy clone). They were developed in a nested clone and
-are published in the same repository as the launcher from this point on.
+Those five commits are the whole C-side change: **14 files, +6566 / −16**
+(`git diff --stat v5.0.1..HEAD -- app server`). They were developed in a nested clone
+and are published in the same repository as the launcher from this point on.
 
-The application layer (launcher, harnesses, docs) has its own 41 commits, authored by
-`GamingCapture <agent@local>` and `GamingScrcpy <agent@local>`. **The implementation
-work was performed by an AI agent working for the repository owner**, and the commits
-say so rather than being re-attributed.
+The application layer (launcher, harnesses, docs) is the rest of the 54 commits over
+the base, authored by `GamingCapture <agent@local>` and `GamingScrcpy <agent@local>`.
+**The implementation work was performed by an AI agent working for the repository
+owner**, and the commits say so rather than being re-attributed.
 
-## History rewrites
+## How this history was assembled
 
-| Event | Effect on hashes | Record |
-|---|---|---|
-| cherry-pick of the 41 app commits onto the scrcpy fork | **new hashes** for all 41; messages and authorship preserved | old→new table below |
-| removal of `tools/scrcpy-stock.zip` and `tools/platform-tools.zip` from history | new hashes again for every commit that contained them (the baseline commit only) | see below |
-| the five C commits and tag `v5.0.1` | **unchanged** — they are the base, never rewritten | `cd91ccf f6f931b` |
+The C work and the application work lived in two repositories with two different
+directory layouts, so neither could be pushed as-is. Each published commit was written
+with `git commit-tree`, carrying the **tree of its development commit** and a parent
+chain rooted at the real upstream tag. That is why the assembly is checkable rather
+than trusted: the diff between two neighbouring published commits equals the diff
+between the two development commits it stands for, no merge resolution can quietly
+alter content, and the first commit's diff against `v5.0.1` is exactly the 14-file
+C-side change above. `git diff v5.0.1..HEAD` is therefore the fork's whole footprint,
+and the 3,210 upstream commits up to and including the tag (`git rev-list --count
+v5.0.1`) are untouched.
 
-`tools/publish_audit.sh` re-checks that no commit message that cites a hash has been
-silently orphaned. Fill in the table when the rewrite happens:
+| Step | Effect on this history |
+|---|---|
+| replay of both development lines onto the tag | every commit here has a **new hash**; messages, authors and author dates are the development ones |
+| removal of `tools/scrcpy-stock.zip` (11,264,634 B) and `tools/platform-tools.zip` (8,044,989 B) from every tree | the two vendored archives are unreachable: `git rev-list --objects --all \| grep -cE 'scrcpy-stock\|platform-tools'` is `0` |
+| redaction of device identifiers and machine paths in every commit **except** the tip | `<dev-id-1>` `<dev-id-2>` `<repo>` `<home>` `<home8>` tokens, listed below |
+| drop of upstream's `.github/workflows/release.yml` | that workflow packages scrcpy alone, so on this tree it would publish an archive without the launcher |
 
-```
-<old hash>  ->  <new hash>   <subject>
-```
+Redaction used neutral tokens instead of the `DEV-*` aliases on purpose: one adb
+identifier was announced by two different devices (see the section below), so rewriting
+it as a single alias would have attributed a measurement to the wrong phone. The tip's
+text was substituted by hand and is what you are reading; the ancestors keep the
+original wording with only those literals replaced.
+
+Consequence for anyone citing hashes: the development hashes are not reproducible from
+this repository, so no document here cites one. The only hash this file quotes is the
+base tag, which is upstream's and unchanged. `tools/publish_audit.sh` checks the
+tracked-file set, the local-only paths, the size budget, the identifier/path literals,
+the licence and provenance documents and that every script the gate invokes exists — it
+does **not** verify hash citations.
 
 ## Numbers that were scrubbed, and numbers that were not
 
