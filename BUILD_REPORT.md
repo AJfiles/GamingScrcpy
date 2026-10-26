@@ -5010,3 +5010,29 @@ the *baseline* is at 7.75 ms — so the tail is judged against the baseline and 
 median is judged against an absolute budget. The harness prints that reasoning every run
 instead of quietly passing.
 
+**The guard itself arrived with two defects, and this report records them because the
+first packaged run after it was written is what exposed them.**
+
+- `pair_check` used to call `bad()` itself and the positive control invoked it as
+  `if pair_check … >/dev/null 2>&1`. A redirection does not create a subshell, so the
+  message was discarded while the counter it increments was not: the packaged run printed
+  `OVERLAY FAIL issues=1` with **no `FAIL` line anywhere in its whole stdout**, aborted
+  the section before any measurement, and reported the archive as broken. A checker that
+  can fail silently is worse than no checker, because the failure looks like a verdict.
+  `pair_check` is now a pure predicate that prints nothing, and every message belongs to
+  its caller.
+- Its first version took the repetition number as argument one while the self-check
+  called it with two paths, so it compared `frames(b)` against `frames("")`: the control
+  that was supposed to prove the guard bites **did bite, for entirely the wrong reason**,
+  and only its other half — the assertion that a 4000-against-4000 pair is accepted —
+  caught it. That is the standing lesson of this project's instruments: a control has to
+  prove both directions, because a one-sided control certifies whatever it accidentally
+  matches.
+
+Both were verified again before shipping: the two-control fragment prints `fires on 4000
+against 3122` and `stays silent on two equal arms` with no stray `grep:` from an empty
+argument, and a `--frames=40 --reps=1` smoke run now reaches the A/B instead of aborting
+(it fails the budgets there, which is correct: one repetition gives a zero-width spread
+and 40-frame percentiles are noise — the budgets belong to the 4000-frame default).
+
+
