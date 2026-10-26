@@ -4850,3 +4850,111 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/launcher_uiauto.ps1
 bash tools/verify_all.sh
 ```
 
+### 5.2.8 The archive was rebuilt a second time, and the first refusal came from my own environment
+
+The published tree now carries `tools/layout.sh`, `tools/publish_audit.sh` and the four
+licence/provenance documents, so the deliverable had to be rebuilt to match it. Nothing
+in the C core or the launcher changed, so **no binary was recompiled**: the verified
+executables were reused, which is the point — the repack touched scripts and docs only.
+
+| quantity | value |
+| --- | --- |
+| `dist/GamingScrcpy/tools/*.sh` + `*.ps1` vs repo | 17 files drifted or missing before the copy, `tools_drift=0` after |
+| repack gate | staged to `out/staging.zip`, published only because it exceeded 100 MB, and its size differs from the archive it replaced — so the content really changed |
+| archive it replaced | 126,572,779 B (`dist/` and root copy, §5.2.6) |
+| instruments extracted and `cmp`-ed | `layout.sh` 3,935 B, `overlay_test.sh` 19,071 B, `verify_all.sh` 49,535 B, `publish_audit.sh` 11,611 B — all byte-identical to the committed files |
+| packaged self-test | `PKGSELFTEST OK (171 files, 3 dirs)`, exit 0 (`out/pkg_selftest_v5_repack.log`) |
+
+171 entries where §5.2.7 recorded 165: the six additions are `layout.sh`,
+`publish_audit.sh`, `LICENSE`, `NOTICE`, `THIRD-PARTY.md`, `PROVENANCE.md`. The nine
+`FAIL` lines in that log again belong to the `(must FAIL)` control arms (the broken
+palette fixture and the duplicated-shortcut fixture) and are the instrument working; the
+verdict line is the only thing that reports the package. The deliverable's exact byte
+length and digest live in `SHA256SUMS.txt` beside the archive, not in this report, because
+every edit to the report changes the archive that embeds the report.
+
+**The run that appeared to break the package was my own instrumentation.** The first
+attempt exported `MSYS2_ARG_CONV_EXCL='*'` for the whole self-test, because that override
+is what lets `git show <ref>:<path>` survive MSYS argument conversion. Set globally it
+also stops POSIX temp paths from being converted for the Windows binaries they are handed
+to, and the run then reported `Error opening output /tmp/tmp.IpaEiJChDn/bench.h264: No
+such file or directory`, `could not encode the H.264 test stream`, an `rc=127` icon check
+and `PKGSELFTEST FAIL issues=4`. Unsetting it produced `PKGSELFTEST OK` with the same
+archive and the same tree. Two rules follow: scope that override to the single command
+that needs it, and when a fresh failure appears immediately after an environment change,
+re-run with the environment of the last green run before believing the product broke.
+
+### 5.2.9 The published repository: the history was rebuilt before anything was pushed
+
+Target: `https://github.com/AJfiles/GamingScrcpy`, created by the owner as an empty
+public repository whose default branch is `main`. The owner's earlier preference was
+private-then-public; creating it public supersedes that, so the publish audit and the
+redaction below had to be complete **before** the first push, because a public first push
+has no review window.
+
+**The assembled copy was not a fork yet.** `workspace/scrcpy` is a shallow clone, and the
+throwaway publication copy inherited that: 142 commits, **two** root commits, and
+`git merge-base --is-ancestor v5.0.1 HEAD` false. Its own 90 "upstream" commits were
+re-created copies of a truncated window whose real hashes were the two entries of
+`.git/shallow` (`2c1f036b`, `890fb3e6`) — and that window stopped in July, three months
+before the `v5.0.1` tag, so grafting the roots could never have made the tag an ancestor.
+Fixing it meant completing the upstream history (`git fetch --unshallow gh`, 28.5 s) and
+replaying our own commits onto the real tag.
+
+**The replay was done with `git commit-tree`, not `cherry-pick`.** Each published commit
+carries the *tree* of the development commit it stands for, so no three-way merge can
+quietly change content and no conflict can be resolved by guessing. Two measurements make
+that checkable rather than trusted: `git diff --quiet <replayed tip> <previous tip>` is
+clean (the tip tree is byte-identical before and after the replay), and the C-side delta
+against the tag is still exactly **14 files, +6566 / −16**, the number `NOTICE` carries.
+The result is 54 commits over `a60891aea193d92e7e5c3942700eca63f9d19a5f`, with `v5.0.1`
+now a true ancestor and `git rev-list --count v5.0.1` = 3,210 untouched upstream commits
+below it.
+
+**Two vendored archives left the history.** `tools/scrcpy-stock.zip` (11,264,634 B) and
+`tools/platform-tools.zip` (8,044,989 B) were tracked from the baseline commit, so
+`filter-branch --index-filter` removed them from every tree; `git rev-list --objects --all`
+now returns 0 matches for either name. Nothing breaks: the only textual references are in
+docs and in one `--exclude-dir` argument of the gate, so no live script consumes them —
+which is why the planned `tools/vendor-bootstrap.sh` was **not** written. Publishing a
+downloader for archives no instrument asks for would add a network dependency and a
+checksum list to maintain for no measured benefit; `PROVENANCE.md` records where they came
+from instead.
+
+**Serials survived in the history while the tip was clean.** Scanning the blobs introduced
+by our commits found 47 offenders of 286, **36 of them carrying a device identifier**, all
+in earlier versions of `BUILD_REPORT.md`. Aliasing them to `DEV-A`/`DEV-T` would have been
+wrong: the same adb identifier was announced by two different devices, so a single alias
+would attribute a measurement to the wrong phone. `filter-branch --tree-filter` therefore
+redacts with neutral tokens (`<dev-id-1>`, `<dev-id-2>`, `<repo>`, `<home>`, `<home8>`) in
+every commit **except the tip**, whose hand-substituted text is preserved unchanged.
+Rescan over the rewritten range: 1 offending blob, `tools/publish_generic_patterns.txt`,
+which is the list of things forbidden and has to contain them. The control ran in the same
+command: the identical scanner still reports 38 offenders on the pre-redaction range, so it
+reads real content and can fail. Pruning the local-path remotes and the inherited refs
+took `.git` from 20 MB to 7.4 MB, and the refset is now `refs/heads/main` plus `refs/tags/v5.0.1`.
+
+**Two things the push itself taught.** GitHub rejected the first push with
+`refusing to allow an OAuth App to create or update workflow
+.github/workflows/release.yml without 'workflow' scope`: the inherited workflow packages
+scrcpy alone, so on this tree it would publish an archive without the launcher, and it was
+removed with that reason in the commit message. The same rule rejects pushing the
+`v5.0.1` *tag*, because the tag's tree also carries a workflow file — so the lineage is
+published as the commit hash above, not as a tag name, and `main` alone carries it.
+
+**Audit of the published layout, before pushing:** `PUBLISH OK` over 459 tracked files, no
+local-only path tracked, `LICENSE` verified as the Apache-2.0 text, all 24 scripts the
+gate invokes present at their literal path, and no document pointing at the pre-move
+location of `PHASE1_AUDIT.md`. The size check passed with `BUILD_REPORT.md` as the largest
+tracked file, comfortably inside the 50 MB budget; its byte count is deliberately not
+quoted here, because it changes with every section of this report and a stale number in a
+document about measurements is worse than no number. One caveat about check 1 in this
+mode: the manifest was generated from the same `git ls-files` it is compared against, so
+in the published layout it proves the audit ran over the real file set, not that the file
+set is the intended one — that judgement is the 459-line list itself.
+
+Still open when this was written, and stated as such in the release: no full gate run
+covers the final `tools/overlay_test.sh` (§5.2.7's gap, tracked as #51), gate §16's audio
+arms remain `SKIP` until media plays on a device, and the four owner-only checks of
+`README_GAMING.md` §7 have not been performed.
+
