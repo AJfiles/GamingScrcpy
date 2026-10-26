@@ -4945,7 +4945,7 @@ published as the commit hash above, not as a tag name, and `main` alone carries 
 **Audit of the published layout, before pushing:** `PUBLISH OK` over 459 tracked files, no
 local-only path tracked, `LICENSE` verified as the Apache-2.0 text, all 24 scripts the
 gate invokes present at their literal path, and no document pointing at the pre-move
-location of `PHASE1_AUDIT.md`. The size check passed with `BUILD_REPORT.md` as the largest
+location of `doc/gaming/PHASE1_AUDIT.md`. The size check passed with `BUILD_REPORT.md` as the largest
 tracked file, comfortably inside the 50 MB budget; its byte count is deliberately not
 quoted here, because it changes with every section of this report and a stale number in a
 document about measurements is worse than no number. One caveat about check 1 in this
