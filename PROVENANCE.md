@@ -91,10 +91,11 @@ in `BUILD_REPORT.md` under the §5.2.x of that change.
 | Claim | Evidence |
 |---|---|
 | gate green | `out/gate_v5_s0.log` — `216 passed, 0 failed`, produced 01:23 with `tools/overlay_test.sh` as of that time |
-| packaged layout works | `out/pkg_selftest_v5_final.log` — `PKGSELFTEST OK (165 files, 3 dirs)`; read it **by section**, it also runs `(must FAIL)` control arms on purpose and those print `FAIL` |
-| the archive carries the fixed instrument | extracted `tools\overlay_test.sh` is 18,801 B and `cmp`-identical to the committed file; `FRAMES=4000`, `REPS=2` and both paired estimators present (`BUILD_REPORT.md` §5.2.6) |
-| deliverable size and identity | 126,572,779 B, both copies, SHA-256 in `SHA256SUMS.txt` at release time |
-| known gap | no **full** gate run exists for the final `overlay_test.sh` (written 02:19, after the 01:23 run). Tracked; it is the last thing to clear before the repo goes public. |
+| packaged layout works | `out/pkg_selftest_v5_repack.log` — `PKGSELFTEST OK (171 files, 3 dirs)`; read it **by section**, it also runs `(must FAIL)` control arms on purpose and those print `FAIL`. The check is re-run for every archive that gets published, and the run belonging to the archive on the release page is quoted in the release notes, because those notes are not inside the archive. |
+| the archive carries the current instrument | `tools\overlay_test.sh`, `layout.sh`, `verify_all.sh` and `publish_audit.sh` extracted from the shipped ZIP are `cmp`-identical to the committed files, and `BUILD_REPORT.md` inside it matches the repository's byte for byte (`BUILD_REPORT.md` §5.2.8) |
+| the latency claim is a pair, not a coincidence | `overlay_test.sh` refuses two arms with different `frames=` counts and proves that refusal on every run before measuring; `REPS` is 3 because two repetitions handed the verdict to the noisier rep (`BUILD_REPORT.md` §5.2.10) |
+| deliverable identity | `SHA256SUMS.txt` beside the archive on the release page; the size is deliberately not quoted here because every edit to the report changes the archive that embeds it |
+| known gap | no **full** 26-section gate run exists for the final `overlay_test.sh`: the packaged run executes that instrument, but only inside the package check. Tracked as the first thing to clear next session. |
 
 ## Machine assumptions a stranger will hit
 
