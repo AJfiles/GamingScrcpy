@@ -18,8 +18,9 @@ secs=${SECS:-12}
 mkdir -p "$out"
 export PATH="/c/msys64/ucrt64/bin:$root/dist/GamingScrcpy/scrcpy:$PATH"
 
+ROOT="$root"; . "$root/tools/layout.sh"
 exe=""
-for c in "$root/workspace/scrcpy/build-usb/app/scrcpy.exe" \
+for c in "$SRC/build-usb/app/scrcpy.exe" \
          "$root/dist/GamingScrcpy/scrcpy/scrcpy.exe"; do
     # a client can only start a session if its server asset sits beside it, and
     # build-usb/app has none: the first version of this script picked the tree

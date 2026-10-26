@@ -33,14 +33,11 @@ if [ -d /c/msys64/ucrt64/bin ]; then
     PATH="/c/msys64/ucrt64/bin:$PATH"
     export PATH
 fi
-DEMO=""
-for c in "$ROOT/workspace/scrcpy/build-usb/app/gamingdemo.exe" \
-         "$ROOT/workspace/scrcpy/build-x/app/gamingdemo.exe" \
-         "$ROOT/dist/GamingScrcpy/scrcpy/gamingdemo.exe" \
-         "$ROOT/scrcpy/gamingdemo.exe"; do
-    [ -f "$c" ] && { DEMO="$c"; break; }
-done
-[ -n "$DEMO" ] || DEMO="${ROOT}/workspace/scrcpy/build-usb/app/gamingdemo.exe"
+# dev | fork | package: resolve the binary for whichever layout is running. This
+# harness used to know only the dev path, and that is why it failed from an
+# extraction while passing at home.
+. "$ROOT/tools/layout.sh"
+[ -n "$DEMO" ] || DEMO="$BUILD/app/gamingdemo.exe"
 # 4000 frames, not the 1000 this defaulted to: a p99 over 1000 samples is the 10th
 # worst value, so one 100-280 ms hiccup decides it. Measured on the same packaged
 # binary, both arms twice: at 1000 frames the baseline's own rep-to-rep p99 spread

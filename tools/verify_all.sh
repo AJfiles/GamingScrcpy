@@ -9,9 +9,13 @@
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # build-usb is what ships (AOA gamepad enabled); build-x is the -Dusb=false
-# baseline kept from Phase 1/2.
-BUILD="$ROOT/workspace/scrcpy/build-usb"
-DIST="$ROOT/dist/GamingScrcpy"
+# baseline kept from Phase 1/2. The gate has to run from all three layouts this
+# project has -- the dev tree with the fork in workspace/, the published fork where
+# the scrcpy sources ARE the repository root, and the extracted package -- so the
+# paths come from tools/layout.sh instead of being hardcoded here.
+. "$ROOT/tools/layout.sh"
+BUILD="${BUILD:-$ROOT/build-usb}"
+DIST="${DIST:-$ROOT/dist/GamingScrcpy}"
 DEMO="$BUILD/app/gamingdemo.exe"
 SCRCPY="$DIST/scrcpy/scrcpy.exe"
 LAUNCHER="$DIST/launcher/GamingScrcpyLauncher.exe"
@@ -42,7 +46,7 @@ if ninja -C "$BUILD" >/dev/null 2>&1; then ok "ninja -C $(basename "$BUILD")"; e
 # A wedged demo process can hold app/gamingdemo.exe while it dies, ninja then
 # fails to relink and every later section would measure the previous binary
 # with no visible hint. Say so before anything reads the file.
-stale=$(find "$ROOT/workspace/scrcpy/app" -name '*.c' -newer "$DEMO" 2>/dev/null | head -1)
+stale=$(find "$SRC/app" -name '*.c' -newer "$DEMO" 2>/dev/null | head -1)
 if [ -n "$stale" ]; then
     bad "gamingdemo.exe is older than ${stale#$ROOT/} (a running gamingdemo.exe holds the file: close it, or reboot to clear a wedged one)"
 else
@@ -506,7 +510,7 @@ head_ "13. touch alignment is still upstream code (the project's core constraint
 # read screen->rect. The fork draws its overlays *into* that rect and never
 # recomputes it -- assert that instead of trusting it, because a future change
 # to the OSD, the borderless mode or the window filter could silently break it.
-SRC="$ROOT/workspace/scrcpy"
+SRC="${SRC:-$ROOT/workspace/scrcpy}"
 if [ ! -d "$SRC/.git" ]; then
     printf '  \033[33mSKIP\033[0m  %s\n' "no git checkout here (packaged layout)"
 else

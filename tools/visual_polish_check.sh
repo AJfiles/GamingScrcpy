@@ -64,7 +64,8 @@ fi
 # The filter panel is a second UI in another process, in SDL, so the same switch
 # has to be asked there too. Only checked when the fork sources are present: the
 # launcher ships on machines that never built the C tree.
-fork=$root/workspace/scrcpy/app/src/overlay.c
+ROOT="$root"; . "$root/tools/layout.sh"
+fork=$SRC/app/src/overlay.c
 if [ -f "$fork" ]; then
     if grep -q "SPI_GETCLIENTAREAANIMATION" "$fork"; then
         ok "the mirror panel asks SPI_GETCLIENTAREAANIMATION too"

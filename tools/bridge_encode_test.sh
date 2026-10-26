@@ -11,7 +11,8 @@
 #   bash tools/bridge_encode_test.sh [frames] [WxH]
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEMO="$ROOT/workspace/scrcpy/build-usb/app/gamingdemo.exe"
+. "$ROOT/tools/layout.sh"
+DEMO="$BUILD/app/gamingdemo.exe"
 FRAMES="${1:-60}"
 SIZE="${2:-320x180}"
 W="${SIZE%x*}"

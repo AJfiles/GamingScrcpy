@@ -23,8 +23,9 @@ BH=720
 BFRAMES=120
 BSIZE="${BW}x${BH}"
 
-BIN="$ROOT/workspace/scrcpy/build-x/app/recorderintegrity.exe"
-[ -x "$BIN" ] || BIN="$ROOT/workspace/scrcpy/build-usb/app/recorderintegrity.exe"
+. "$ROOT/tools/layout.sh"
+BIN="$SRC/build-x/app/recorderintegrity.exe"
+[ -x "$BIN" ] || BIN="$SRC/build-usb/app/recorderintegrity.exe"
 # this same script also ships inside the package, where the harness sits next
 # to scrcpy.exe instead of in a build tree
 [ -x "$BIN" ] || BIN="$ROOT/scrcpy/recorderintegrity.exe"

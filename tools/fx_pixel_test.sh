@@ -27,19 +27,9 @@ for d in /c/msys64/ucrt64/bin /ucrt64/bin; do
 done
 export PATH
 
-DEMO=""
-SC=""
-for c in "$ROOT/workspace/scrcpy/build-usb/app/gamingdemo.exe" \
-         "$ROOT/workspace/scrcpy/build-x/app/gamingdemo.exe" \
-         "$ROOT/scrcpy/gamingdemo.exe"; do
-    [ -f "$c" ] && { DEMO="$c"; break; }
-done
-for c in "$ROOT/workspace/scrcpy/build-usb/app/scrcpy.exe" \
-         "$ROOT/dist/GamingScrcpy/scrcpy.exe" \
-         "$ROOT/scrcpy/scrcpy.exe"; do
-    [ -f "$c" ] && { SC="$c"; break; }
-done
-[ -n "$DEMO" ] || { echo "FAIL gamingdemo not found (build tree or package)"; exit 1; }
+# resolve both binaries for the layout actually running (see tools/layout.sh)
+. "$ROOT/tools/layout.sh"
+[ -n "$DEMO" ] || { echo "FAIL gamingdemo not found (build tree or package; layout=$LAYOUT)"; exit 1; }
 
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT

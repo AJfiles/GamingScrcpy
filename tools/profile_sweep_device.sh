@@ -31,9 +31,10 @@ export PATH="/c/msys64/ucrt64/bin:$root/dist/GamingScrcpy/scrcpy:$PATH"
 
 # the packaged layout is the one a user runs, and it is the only one whose exe has
 # the server asset beside it (a build-tree exe cannot start a session at all)
+ROOT="$root"; . "$root/tools/layout.sh"
 exe=""
 for c in "$root/dist/GamingScrcpy/scrcpy/scrcpy.exe" \
-         "$root/workspace/scrcpy/build-usb/app/scrcpy.exe"; do
+         "$SRC/build-usb/app/scrcpy.exe"; do
     [ -f "$c" ] && [ -f "$(dirname "$c")/scrcpy-server" ] && { exe=$c; break; }
 done
 [ -n "$exe" ] || { echo 'SKIP  no scrcpy.exe with a scrcpy-server beside it'; exit 2; }

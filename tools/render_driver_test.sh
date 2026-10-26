@@ -15,13 +15,8 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRAMES="${1:-45}"
 
-DEMO=""
-for c in "$ROOT/workspace/scrcpy/build-usb/app/gamingdemo.exe" \
-         "$ROOT/workspace/scrcpy/build-x/app/gamingdemo.exe" \
-         "$ROOT/scrcpy/gamingdemo.exe"; do
-    if [ -f "$c" ]; then DEMO="$c"; break; fi
-done
-[ -n "$DEMO" ] || { echo "FAIL gamingdemo not found (build tree or package)"; exit 1; }
+. "$ROOT/tools/layout.sh"
+[ -n "$DEMO" ] || { echo "FAIL gamingdemo not found (build tree or package; layout=$LAYOUT)"; exit 1; }
 
 WINSIZE=1920x1080
 SRC=480x800
