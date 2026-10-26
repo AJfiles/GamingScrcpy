@@ -1,7 +1,17 @@
+build/
+/dist/
+/build-*/
+/build_*/
+/release-*/
+.idea/
+.gradle/
+/x/
+local.properties
+/scrcpy-server
 
 # GamingScrcpy: local artifacts of this fork. The 126 MB archive is a Release asset
 # and must never be committed; tools/stock and tools/platform-tools are restored by
-# tools/vendor-bootstrap.sh.
+tools/vendor-bootstrap.sh.
 /out/
 /launcher/bin/
 /launcher/obj/
