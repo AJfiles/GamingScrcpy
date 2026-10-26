@@ -3,8 +3,21 @@ build/
 /build-*/
 /build_*/
 /release-*/
-.idea/
+/.github/
+/.idea/
 .gradle/
 /x/
 local.properties
 /scrcpy-server
+
+# GamingScrcpy: local artifacts of this fork. The 126 MB archive is a Release asset
+# and must never be committed; tools/stock and tools/platform-tools are restored by
+# tools/vendor-bootstrap.sh.
+/out/
+/launcher/bin/
+/launcher/obj/
+/tools/platform-tools/
+/tools/stock/
+*.log
+__pycache__/
+/GamingScrcpy-win64-fork.zip
